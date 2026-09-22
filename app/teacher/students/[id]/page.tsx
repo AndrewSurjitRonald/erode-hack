@@ -6,6 +6,12 @@ import { Sidebar } from "@/components/Sidebar";
 import { bandForScore, MASTERY_COLORS } from "@/lib/colors";
 import { useI18n } from "@/lib/i18n";
 import { IconLightbulb, IconCheck, IconX } from "@/lib/icons";
+import { escapeHtml, openPrintWindow, worksheetHtml, PrintableQuestion } from "@/lib/print";
+
+type BankQuestion = PrintableQuestion & { topicId: string };
+
+// Questions per focus topic on the remedial worksheet
+const WORKSHEET_QUESTIONS_PER_TOPIC = 4;
 
 type TopicMastery = { topicId: string; topicName: string; score: number };
 type Attempt = { id: string; topicName: string; difficulty: number; correct: boolean; createdAt: string };
@@ -35,13 +41,7 @@ type Tab = (typeof TABS)[number];
 
 function AIInsightsCard({ insights }: { insights: string[] }) {
   const displayInsights =
-    insights && insights.length > 0
-      ? insights
-      : [
-          "Struggles with linear equations",
-          "Shows consistent improvement over time",
-          "Recommended to focus on more word problems",
-        ];
+    insights && insights.length > 0 ? insights : ["Not enough practice data yet to generate insights."];
 
   return (
     <div className="rounded-2xl bg-emerald-50/70 border border-emerald-100 p-6 shadow-xs flex flex-col justify-between">
@@ -69,7 +69,8 @@ export default function StudentDetailPage() {
   const [detail, setDetail] = useState<StudentDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>("Mastery");
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
+  const [assigning, setAssigning] = useState(false);
 
   useEffect(() => {
     fetch(`/api/dashboard/student/${params.id}`)
@@ -82,78 +83,71 @@ export default function StudentDetailPage() {
       .finally(() => setLoading(false));
   }, [params.id, router]);
 
-  function handleAssignHomework() {
-    setToast("Targeted revision homework assigned to student's practice portal! 🎯");
+  function showToast(tone: "ok" | "error", text: string) {
+    setToast({ tone, text });
     setTimeout(() => setToast(null), 4000);
   }
 
-  function handleExportWorksheet() {
+  // The student's two weakest topics drive both the homework and the worksheet
+  const focusTopics = detail ? [...detail.topicMastery].sort((a, b) => a.score - b.score).slice(0, 2) : [];
+
+  async function handleAssignHomework() {
+    if (!detail || focusTopics.length === 0) return;
+    const topic = focusTopics[0];
+    setAssigning(true);
+    try {
+      const res = await fetch("/api/assignments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ topicId: topic.topicId, studentId: params.id, questionCount: 5 }),
+      });
+      if (!res.ok) throw new Error(`assign ${res.status}`);
+      showToast("ok", `Assigned 5 ${topic.topicName} questions to ${detail.name}. It now shows on their dashboard. 🎯`);
+    } catch {
+      showToast("error", "Couldn't assign homework. Please try again.");
+    } finally {
+      setAssigning(false);
+    }
+  }
+
+  async function handleExportWorksheet() {
     if (!detail) return;
-    const printWindow = window.open("", "_blank");
-    if (!printWindow) return;
+    const write = openPrintWindow();
+    if (!write) {
+      showToast("error", "Allow pop-ups for this site to open the worksheet.");
+      return;
+    }
 
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Remedial Worksheet - ${detail.name}</title>
-          <style>
-            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 40px; color: #0F172A; }
-            .header { border-bottom: 2px solid #2563EB; padding-bottom: 12px; margin-bottom: 24px; display: flex; justify-content: space-between; }
-            h1 { margin: 0; color: #2563EB; font-size: 24px; }
-            .meta { font-size: 14px; color: #64748B; margin-top: 4px; }
-            .section { margin-bottom: 28px; }
-            .section-title { font-size: 16px; font-weight: bold; background: #EFF6FF; padding: 8px 12px; border-radius: 6px; margin-bottom: 12px; }
-            .question { margin-bottom: 20px; font-size: 14px; line-height: 1.6; }
-            .workspace { border: 1px dashed #CBD5E1; height: 90px; border-radius: 8px; margin-top: 8px; }
-            @media print { .no-print { display: none; } }
-          </style>
-        </head>
-        <body>
-          <div class="no-print" style="margin-bottom: 20px;">
-            <button onclick="window.print()" style="background: #0F172A; color: white; padding: 10px 20px; border-radius: 8px; font-weight: bold; border: none; cursor: pointer;">
-              🖨️ Print / Save as PDF
-            </button>
-          </div>
-          <div class="header">
-            <div>
-              <h1>PathLearn — Personalized Math Remedial Worksheet</h1>
-              <div class="meta">Class 8 · Mathematics | Student: <strong>${detail.name}</strong> | Archetype: ${detail.status}</div>
-            </div>
-            <div style="text-align: right; font-size: 12px; color: #64748B;">Date: ${new Date().toLocaleDateString()}</div>
-          </div>
+    try {
+      const res = await fetch("/api/questions");
+      if (!res.ok) throw new Error(`questions ${res.status}`);
+      const { questions } = (await res.json()) as { questions: BankQuestion[] };
 
-          <div class="section">
-            <div class="section-title">Focus Area 1: Linear Equations & Algebra</div>
-            <div class="question">
-              <strong>Q1.</strong> Solve for x: 3(x + 2) = 2x + 11. Show your step-by-step working.
-              <div class="workspace"></div>
-            </div>
-            <div class="question">
-              <strong>Q2.</strong> The perimeter of a rectangle is 48 cm. Its length is 4 cm more than its width. Find its dimensions.
-              <div class="workspace"></div>
-            </div>
-          </div>
+      const sections = focusTopics.map((topic, i) => {
+        // Easiest first, so the worksheet ramps up in difficulty
+        const pool = questions
+          .filter((q) => q.topicId === topic.topicId)
+          .sort((a, b) => a.difficulty - b.difficulty);
+        return {
+          title: `Focus Area ${i + 1}: ${topic.topicName} (current mastery ${Math.round(topic.score * 100)}%)`,
+          questions: pool.slice(0, WORKSHEET_QUESTIONS_PER_TOPIC),
+        };
+      });
 
-          <div class="section">
-            <div class="section-title">Focus Area 2: Ratios & Proportions</div>
-            <div class="question">
-              <strong>Q3.</strong> If 12 notebooks cost ₹180, what is the cost of 7 notebooks?
-              <div class="workspace"></div>
-            </div>
-            <div class="question">
-              <strong>Q4.</strong> Two numbers are in the ratio 4 : 5. If their sum is 135, find the larger number.
-              <div class="workspace"></div>
-            </div>
+      write(
+        `Remedial Worksheet - ${detail.name}`,
+        `<div class="header">
+          <div>
+            <h1>PathLearn — Personalized Math Remedial Worksheet</h1>
+            <div class="meta">${escapeHtml(detail.className)} | Student: <strong>${escapeHtml(detail.name)}</strong> | Profile: ${escapeHtml(detail.status)}</div>
           </div>
-
-          <div style="margin-top: 40px; border-top: 1px solid #E2E8F0; padding-top: 12px; font-size: 12px; color: #94A3B8; text-align: center;">
-            Generated automatically by PathLearn Adaptive Learning Engine
-          </div>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
+          <div class="meta">Date: ${escapeHtml(new Date().toLocaleDateString())}</div>
+        </div>
+        ${worksheetHtml(sections)}`
+      );
+    } catch {
+      write("Worksheet error", "<p>Couldn't load questions for the worksheet. Close this tab and try again.</p>");
+    }
   }
 
   return (
@@ -171,9 +165,15 @@ export default function StudentDetailPage() {
 
         {/* Success Toast */}
         {toast && (
-          <div className="mb-4 bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-semibold px-4 py-3 rounded-2xl animate-fade-in flex items-center justify-between shadow-xs">
-            <span>{toast}</span>
-            <button onClick={() => setToast(null)} className="text-emerald-700 hover:text-emerald-900 cursor-pointer">
+          <div
+            className={`mb-4 text-sm font-semibold px-4 py-3 rounded-2xl animate-fade-in flex items-center justify-between shadow-xs border ${
+              toast.tone === "ok"
+                ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                : "bg-red-50 border-red-200 text-red-700"
+            }`}
+          >
+            <span>{toast.text}</span>
+            <button onClick={() => setToast(null)} className="opacity-70 hover:opacity-100 cursor-pointer">
               ✕
             </button>
           </div>
@@ -240,10 +240,17 @@ export default function StudentDetailPage() {
               </button>
               <button
                 onClick={handleAssignHomework}
-                className="inline-flex items-center gap-2 rounded-xl bg-[#0F172A] hover:bg-slate-800 text-white px-4 py-2.5 text-xs sm:text-sm font-semibold transition-all shadow-xs cursor-pointer"
+                disabled={assigning || focusTopics.length === 0}
+                className="inline-flex items-center gap-2 rounded-xl bg-[#0F172A] hover:bg-slate-800 text-white px-4 py-2.5 text-xs sm:text-sm font-semibold transition-all shadow-xs cursor-pointer disabled:opacity-50"
               >
                 <span>🎯</span>
-                <span>{t("assign_homework")}</span>
+                <span>
+                  {assigning
+                    ? "Assigning…"
+                    : focusTopics[0]
+                    ? `${t("assign_homework")}: ${focusTopics[0].topicName}`
+                    : t("assign_homework")}
+                </span>
               </button>
             </div>
 

@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 export async function POST(req: NextRequest) {
-  const body = await req.json();
-  const name = typeof body.name === "string" ? body.name.trim() : "";
+  const body = await req.json().catch(() => null);
+  const name = typeof body?.name === "string" ? body.name.trim() : "";
   if (!name) {
     return NextResponse.json({ error: "Name is required" }, { status: 400 });
   }
@@ -26,6 +26,22 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET() {
-  const students = await prisma.student.findMany({ orderBy: { name: "asc" } });
-  return NextResponse.json({ students });
+  const students = await prisma.student.findMany({
+    orderBy: { name: "asc" },
+    include: { mastery: true },
+  });
+  const topicCount = await prisma.topic.count();
+
+  return NextResponse.json({
+    students: students.map((s) => ({
+      id: s.id,
+      name: s.name,
+      // Topics without a mastery row count as the 0.5 starting estimate, matching getStudentTopicMastery
+      overallMastery:
+        topicCount > 0
+          ? (s.mastery.reduce((sum, m) => sum + m.score, 0) + (topicCount - s.mastery.length) * 0.5) /
+            topicCount
+          : 0.5,
+    })),
+  });
 }

@@ -42,7 +42,22 @@ export function clearSession() {
   localStorage.removeItem(ROLE_KEY);
 }
 
-const emptySubscribe = (callback: () => void) => {
+/**
+ * Fetches a student-scoped API. If the saved student no longer exists (e.g. the database
+ * was reset), the stale session is cleared and onMissing runs instead of the page crashing.
+ */
+export async function fetchStudentJson<T>(url: string, onMissing: () => void): Promise<T | null> {
+  const res = await fetch(url);
+  if (res.status === 404 || res.status === 401) {
+    clearSession();
+    onMissing();
+    return null;
+  }
+  if (!res.ok) throw new Error(`${url} failed with ${res.status}`);
+  return res.json() as Promise<T>;
+}
+
+const emptySubscribe =(callback: () => void) => {
   if (typeof window !== "undefined") {
     window.addEventListener("storage", callback);
     return () => window.removeEventListener("storage", callback);

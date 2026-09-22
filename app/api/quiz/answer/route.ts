@@ -4,7 +4,7 @@ import { updateMastery } from "@/lib/adaptive-engine";
 import { getStudentTopicMastery } from "@/lib/student-data";
 
 export async function POST(req: NextRequest) {
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const { studentId, questionId, selectedIdx } = body as {
     studentId?: string;
     questionId?: string;
@@ -24,6 +24,14 @@ export async function POST(req: NextRequest) {
   });
   if (!question) {
     return NextResponse.json({ error: "Question not found" }, { status: 404 });
+  }
+  if (!Number.isInteger(selectedIdx) || selectedIdx < 0 || selectedIdx >= question.options.length) {
+    return NextResponse.json({ error: "selectedIdx is out of range" }, { status: 400 });
+  }
+
+  const student = await prisma.student.findUnique({ where: { id: studentId } });
+  if (!student) {
+    return NextResponse.json({ error: "Student not found" }, { status: 404 });
   }
 
   const correct = selectedIdx === question.answerIdx;

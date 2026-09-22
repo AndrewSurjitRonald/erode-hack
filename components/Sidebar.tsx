@@ -46,6 +46,37 @@ export function Sidebar({ variant, activeItem }: { variant: SidebarVariant; acti
   }
 
   return (
+    <>
+    {/* Mobile / tablet: bottom tab bar (the sidebar below is desktop-only) */}
+    <nav
+      className="mobile-tabbar lg:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur border-t border-slate-200 flex justify-around px-1 pt-1.5"
+      style={{ paddingBottom: "calc(0.375rem + env(safe-area-inset-bottom, 0px))" }}
+    >
+      {items.map((item) => {
+        const isActive = item.key === activeItem;
+        const Icon = item.icon;
+        return (
+          <Link
+            key={item.key}
+            href={item.href}
+            className={`flex flex-col items-center gap-0.5 min-w-0 flex-1 rounded-lg py-1 text-[10px] font-semibold ${
+              isActive ? "text-blue-600" : "text-slate-500"
+            }`}
+          >
+            <Icon className="w-5 h-5 shrink-0" />
+            <span className="truncate max-w-full">{item.label}</span>
+          </Link>
+        );
+      })}
+      <button
+        onClick={handleLogout}
+        className="flex flex-col items-center gap-0.5 min-w-0 flex-1 rounded-lg py-1 text-[10px] font-semibold text-slate-500 cursor-pointer"
+      >
+        <IconLogOut className="w-5 h-5 shrink-0" />
+        <span className="truncate max-w-full">{t("logout")}</span>
+      </button>
+    </nav>
+
     <aside className="hidden lg:flex flex-col w-[240px] shrink-0 bg-white border-r border-slate-200 min-h-screen sticky top-0 py-6 px-4">
       <div className="px-3 mb-8">
         <Logo />
@@ -86,5 +117,6 @@ export function Sidebar({ variant, activeItem }: { variant: SidebarVariant; acti
         </button>
       </div>
     </aside>
+    </>
   );
 }

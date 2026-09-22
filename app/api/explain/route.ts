@@ -35,7 +35,10 @@ function fallbackExplanation(
 }
 
 export async function POST(req: Request) {
-  const body = await req.json();
+  const body = await req.json().catch(() => null);
+  if (!body || typeof body !== "object") {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
   const { questionText, topicName, options, correctIdx, selectedIdx, lang } = body as {
     questionText?: string;
     topicName?: string;

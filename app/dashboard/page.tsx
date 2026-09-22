@@ -6,17 +6,31 @@ import Link from "next/link";
 import { Sidebar } from "@/components/Sidebar";
 import { MasteryRing } from "@/components/MasteryRing";
 import { GamificationBar } from "@/components/GamificationBar";
-import { useStudentId, getStudentId, getStudentName } from "@/lib/session";
+import { getStudentId, getStudentName, fetchStudentJson } from "@/lib/session";
 import { useI18n } from "@/lib/i18n";
+import type { GamificationState } from "@/lib/gamification";
 import { IconBookOpen, IconFileText, IconArrowRight } from "@/lib/icons";
+
+type Assignment = {
+  id: string;
+  topicId: string;
+  topicName: string;
+  topicNameTa: string;
+  scope: "class" | "student";
+  questionCount: number;
+  completedCount: number;
+  done: boolean;
+};
 
 type Summary = {
   name: string;
   className: string;
   overallMastery: number;
-  topicMastery: { topicId: string; topicName: string; score: number }[];
+  topicMastery: { topicId: string; topicName: string; topicNameTa: string; score: number }[];
   hasNextQuestion: boolean;
   weakTopicCount: number;
+  gamification: GamificationState;
+  assignments: Assignment[];
 };
 
 function MountainIllustration() {
@@ -43,10 +57,10 @@ const TOPIC_COLORS: Record<string, string> = {
 
 export default function StudentDashboardPage() {
   const router = useRouter();
-  const { t } = useI18n();
-  const studentId = useStudentId();
+  const { t, lang } = useI18n();
   const [summary, setSummary] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     const id = getStudentId();
@@ -54,11 +68,13 @@ export default function StudentDashboardPage() {
       router.replace("/");
       return;
     }
-    fetch(`/api/student/${id}/summary`)
-      .then((r) => r.json())
-      .then(setSummary)
+    fetchStudentJson<Summary>(`/api/student/${id}/summary`, () => router.replace("/"))
+      .then((data) => data && setSummary(data))
+      .catch(() => setLoadError(true))
       .finally(() => setLoading(false));
   }, [router]);
+
+  const pendingAssignments = summary?.assignments.filter((a) => !a.done) ?? [];
 
   return (
     <div className="min-h-screen flex bg-[#F8FAFC]">
@@ -66,6 +82,13 @@ export default function StudentDashboardPage() {
 
       <main className="flex-1 px-6 sm:px-10 lg:px-12 py-8 max-w-6xl">
         {loading && <SkeletonDashboard />}
+
+        {!loading && loadError && (
+          <div className="rounded-2xl bg-white border border-red-200 p-10 text-center shadow-xs">
+            <p className="font-bold text-[#0F172A] mb-1">Couldn&apos;t load your dashboard</p>
+            <p className="text-sm text-slate-500">Check that the server is running, then refresh the page.</p>
+          </div>
+        )}
 
         {!loading && summary && (
           <div className="flex flex-col gap-6 animate-fade-in">
@@ -85,7 +108,43 @@ export default function StudentDashboardPage() {
             </header>
 
             {/* Gamification Bar: Streaks, XP points, Badges */}
-            {studentId && <GamificationBar studentId={studentId} />}
+            <GamificationBar state={summary.gamification} />
+
+            {/* Homework assigned by the teacher */}
+            {pendingAssignments.length > 0 && (
+              <section className="rounded-2xl bg-amber-50/70 border border-amber-200 p-5 shadow-xs">
+                <h2 className="font-bold text-[#0F172A] text-base mb-3 flex items-center gap-2">
+                  <span>🎯</span> Homework from your teacher
+                </h2>
+                <div className="flex flex-col gap-2.5">
+                  {pendingAssignments.map((a) => (
+                    <Link
+                      key={a.id}
+                      href={`/practice?topic=${a.topicId}`}
+                      className="flex items-center justify-between gap-4 bg-white rounded-xl border border-amber-100 px-4 py-3 hover:border-amber-400 transition-colors"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-bold text-sm text-[#0F172A]">
+                          {lang === "ta" && a.topicNameTa ? a.topicNameTa : a.topicName}
+                          <span className="ml-2 text-[10px] font-semibold uppercase text-amber-700">
+                            {a.scope === "class" ? "Whole class" : "Just for you"}
+                          </span>
+                        </p>
+                        <div className="mt-1.5 h-1.5 w-40 max-w-full rounded-full bg-slate-100 overflow-hidden">
+                          <div
+                            className="h-full bg-amber-500 rounded-full"
+                            style={{ width: `${(a.completedCount / a.questionCount) * 100}%` }}
+                          />
+                        </div>
+                      </div>
+                      <span className="text-xs font-bold text-amber-800 whitespace-nowrap">
+                        {a.completedCount}/{a.questionCount} done →
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              </section>
+            )}
 
             {/* Upper Grid: Learning Progress & Topic Mastery */}
             <div className="grid md:grid-cols-12 gap-6">
@@ -121,7 +180,7 @@ export default function StudentDashboardPage() {
                       size={82}
                       strokeWidth={8}
                       customColor={TOPIC_COLORS[tItem.topicName]}
-                      label={tItem.topicName}
+                      label={lang === "ta" && tItem.topicNameTa ? tItem.topicNameTa : tItem.topicName}
                     />
                   ))}
                 </div>
@@ -168,7 +227,7 @@ export default function StudentDashboardPage() {
                     <p className="text-sm text-slate-500 mt-1">
                       {summary.weakTopicCount > 0
                         ? `${summary.weakTopicCount} weak topic${summary.weakTopicCount === 1 ? "" : "s"} need your attention`
-                        : "2 weak topics need your attention"}
+                        : "No weak topics right now — keep building mastery"}
                     </p>
                   </div>
                 </div>

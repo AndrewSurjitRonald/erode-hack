@@ -1,9 +1,13 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { Suspense, useEffect, useState, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import { Sidebar } from "@/components/Sidebar";
 import { useI18n } from "@/lib/i18n";
 import { IconFileText } from "@/lib/icons";
+import { escapeHtml, openPrintWindow, worksheetHtml } from "@/lib/print";
+
+const WORKSHEET_MAX_QUESTIONS = 10;
 
 interface QuestionItem {
   id: string;
@@ -18,10 +22,20 @@ interface QuestionItem {
 }
 
 export default function TeacherResourcesPage() {
+  return (
+    <Suspense fallback={null}>
+      <ResourcesContent />
+    </Suspense>
+  );
+}
+
+function ResourcesContent() {
   const { t } = useI18n();
+  const searchParams = useSearchParams();
   const [questions, setQuestions] = useState<QuestionItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedTopic, setSelectedTopic] = useState<string>("All");
+  // ?topic=<name> preselects a topic (linked from Class Insights)
+  const [selectedTopic, setSelectedTopic] = useState<string>(searchParams.get("topic") ?? "All");
   const [selectedDifficulty, setSelectedDifficulty] = useState<number | "All">("All");
   const [showAddModal, setShowAddModal] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -63,65 +77,39 @@ export default function TeacherResourcesPage() {
   }
 
   function handlePrintWorksheet() {
-    const printWindow = window.open("", "_blank");
-    if (!printWindow) return;
+    const write = openPrintWindow();
+    if (!write) {
+      showToast("Allow pop-ups for this site to open the worksheet.");
+      return;
+    }
 
-    const itemsToPrint = filtered.length > 0 ? filtered.slice(0, 10) : questions.slice(0, 10);
-    const html = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>PathLearn - Practice Worksheet</title>
-          <style>
-            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 40px; color: #0F172A; }
-            .header { border-bottom: 2px solid #2563EB; padding-bottom: 16px; margin-bottom: 24px; display: flex; justify-content: space-between; }
-            .title { font-size: 24px; font-weight: 800; color: #2563EB; }
-            .meta { font-size: 14px; color: #64748B; margin-top: 4px; }
-            .student-info { display: flex; gap: 30px; margin-bottom: 30px; font-size: 14px; border: 1px dashed #CBD5E1; padding: 12px; border-radius: 8px; }
-            .item { margin-bottom: 24px; page-break-inside: avoid; }
-            .q-num { font-weight: bold; color: #2563EB; margin-right: 8px; }
-            .q-text { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
-            .options { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-left: 20px; }
-            .opt { font-size: 14px; color: #334155; }
-            .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; background: #EFF6FF; color: #1D4ED8; }
-            @media print { button { display: none; } }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <div>
-              <div class="title">PathLearn Adaptive Worksheet</div>
-              <div class="meta">Topic: ${selectedTopic} · Generated on ${new Date().toLocaleDateString()}</div>
-            </div>
-            <button onclick="window.print()" style="padding: 8px 16px; background: #2563EB; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold;">🖨️ Print Now</button>
-          </div>
-          <div class="student-info">
-            <div><strong>Student Name:</strong> _____________________________</div>
-            <div><strong>Date:</strong> _______________</div>
-            <div><strong>Score:</strong> _____ / ${itemsToPrint.length}</div>
-          </div>
-          ${itemsToPrint
-            .map(
-              (q, i) => `
-            <div class="item">
-              <div class="q-text">
-                <span class="q-num">${i + 1}.</span>
-                <span>${q.text}</span>
-                <span class="badge">${q.topicName} · Level ${q.difficulty}</span>
-              </div>
-              <div class="options">
-                ${q.options.map((opt, oIdx) => `<div class="opt">( ${String.fromCharCode(65 + oIdx)} ) &nbsp; ${opt}</div>`).join("")}
-              </div>
-            </div>
-          `
-            )
-            .join("")}
-        </body>
-      </html>
-    `;
+    const itemsToPrint = filtered.slice(0, WORKSHEET_MAX_QUESTIONS);
+    const levelLabel = selectedDifficulty === "All" ? "All levels" : `Level ${selectedDifficulty}`;
+    write(
+      "PathLearn - Practice Worksheet",
+      `<div class="header">
+        <div>
+          <h1>PathLearn Adaptive Worksheet</h1>
+          <div class="meta">Topic: ${escapeHtml(selectedTopic === "All" ? "All topics" : selectedTopic)} · ${levelLabel}</div>
+        </div>
+        <div class="meta">Name: ____________________<br/>Score: _____ / ${itemsToPrint.length}</div>
+      </div>
+      ${worksheetHtml([{ title: `${itemsToPrint.length} practice questions`, questions: itemsToPrint }])}`
+    );
+  }
 
-    printWindow.document.write(html);
-    printWindow.document.close();
+  async function handleAssignTopic(topicId: string, topicName: string) {
+    try {
+      const res = await fetch("/api/assignments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ topicId, questionCount: 5 }),
+      });
+      if (!res.ok) throw new Error(`assign ${res.status}`);
+      showToast(`Assigned 5 ${topicName} questions to the whole class.`);
+    } catch {
+      showToast("Couldn't assign — please try again.");
+    }
   }
 
   async function handleAddQuestion(e: React.FormEvent) {
@@ -149,15 +137,21 @@ export default function TeacherResourcesPage() {
         }),
       });
 
-      if (res.ok) {
-        showToast("✨ New Question Added to Bank!");
-        setShowAddModal(false);
-        setNewText("");
-        setNewOptions(["", "", "", ""]);
-        // refresh list
-        const refreshed = await fetch("/api/questions").then((r) => r.json());
-        if (refreshed.questions) setQuestions(refreshed.questions);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(`Couldn't save the question: ${err.error ?? res.status}`);
+        return;
       }
+
+      showToast("✨ New Question Added to Bank!");
+      setShowAddModal(false);
+      setNewText("");
+      setNewOptions(["", "", "", ""]);
+      // refresh list
+      const refreshed = await fetch("/api/questions").then((r) => r.json());
+      if (refreshed.questions) setQuestions(refreshed.questions);
+    } catch {
+      alert("Couldn't reach the server. Please try again.");
     } finally {
       setSaving(false);
     }
@@ -189,6 +183,7 @@ export default function TeacherResourcesPage() {
           <div className="flex items-center gap-3">
             <button
               onClick={handlePrintWorksheet}
+              disabled={filtered.length === 0}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs sm:text-sm font-bold shadow-2xs transition-colors cursor-pointer"
             >
               <IconFileText />
@@ -323,10 +318,11 @@ export default function TeacherResourcesPage() {
                       : "Unattempted in test"}
                   </span>
                   <button
-                    onClick={() => showToast(`Assigned question to active practice sets!`)}
+                    onClick={() => handleAssignTopic(q.topicId, q.topicName)}
+                    title={`Assign 5 ${q.topicName} practice questions to the whole class`}
                     className="text-blue-600 font-bold hover:underline cursor-pointer"
                   >
-                    + Assign to Class
+                    + Assign {q.topicName} to class
                   </button>
                 </div>
               </div>

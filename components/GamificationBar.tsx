@@ -1,27 +1,10 @@
 "use client";
 
 import { useI18n } from "@/lib/i18n";
-import { getGamificationState, GamificationState } from "@/lib/gamification";
-import { useEffect, useState } from "react";
+import type { GamificationState } from "@/lib/gamification";
 
-export function GamificationBar({ studentId }: { studentId: string }) {
+export function GamificationBar({ state }: { state: GamificationState }) {
   const { t } = useI18n();
-  const [state, setState] = useState<GamificationState | null>(() => {
-    if (typeof window !== "undefined") {
-      return getGamificationState(studentId);
-    }
-    return null;
-  });
-
-  useEffect(() => {
-    function refresh() {
-      setState(getGamificationState(studentId));
-    }
-    window.addEventListener("storage", refresh);
-    return () => window.removeEventListener("storage", refresh);
-  }, [studentId]);
-
-  if (!state) return null;
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 bg-white rounded-2xl border border-slate-200 px-5 py-3 shadow-xs">
@@ -32,7 +15,7 @@ export function GamificationBar({ studentId }: { studentId: string }) {
           <div>
             <p className="text-xs text-slate-500 font-medium">{t("streak")}</p>
             <p className="font-extrabold text-[#0F172A] text-sm leading-none mt-0.5">
-              {state.streak} Days
+              {state.streak} {state.streak === 1 ? "Day" : "Days"}
             </p>
           </div>
         </div>
@@ -56,7 +39,7 @@ export function GamificationBar({ studentId }: { studentId: string }) {
           {state.badges.map((b) => (
             <span
               key={b.id}
-              title={`${b.title} — ${b.desc}`}
+              title={`${b.title} — ${b.desc}${b.unlocked ? "" : " (locked)"}`}
               className={`w-7 h-7 rounded-full flex items-center justify-center text-sm transition-all ${
                 b.unlocked
                   ? "bg-amber-50 border border-amber-200 text-amber-700 shadow-2xs"

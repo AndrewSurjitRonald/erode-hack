@@ -11,18 +11,20 @@ datasource db {
 }
 
 model Student {
-  id       String    @id @default(cuid())
-  name     String
-  attempts Attempt[]
-  mastery  Mastery[]
+  id          String       @id @default(cuid())
+  name        String
+  attempts    Attempt[]
+  mastery     Mastery[]
+  assignments Assignment[]
 }
 
 model Topic {
-  id        String     @id @default(cuid())
-  name      String
-  nameTa    String     @default("") // Tamil translation of `name`
-  questions Question[]
-  mastery   Mastery[]
+  id          String       @id @default(cuid())
+  name        String
+  nameTa      String       @default("") // Tamil translation of `name`
+  questions   Question[]
+  mastery     Mastery[]
+  assignments Assignment[]
 }
 
 model Question {
@@ -57,4 +59,15 @@ model Mastery {
   score     Float   @default(0.5) // 0 to 1, Elo-style running estimate
 
   @@unique([studentId, topicId])
+}
+
+// Teacher-assigned practice on a topic. studentId null = assigned to the whole class.
+model Assignment {
+  id            String   @id @default(cuid())
+  topicId       String
+  topic         Topic    @relation(fields: [topicId], references: [id])
+  studentId     String?
+  student       Student? @relation(fields: [studentId], references: [id])
+  questionCount Int      @default(5) // questions to attempt on the topic to complete it
+  createdAt     DateTime @default(now())
 }

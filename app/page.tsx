@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { DEMO_STUDENT_NAMES, personaLabel, personaTone, StudentListItem } from "@/lib/persona";
 import { Logo } from "@/components/Logo";
 import { GrowthIllustration } from "@/components/GrowthIllustration";
 import { saveStudentSession, saveTeacherSession } from "@/lib/session";
@@ -59,6 +60,25 @@ export default function Home() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPitchDeck, setShowPitchDeck] = useState(false);
+  const [students, setStudents] = useState<StudentListItem[]>([]);
+
+  useEffect(() => {
+    fetch("/api/student")
+      .then((r) => (r.ok ? r.json() : { students: [] }))
+      .then((data) => setStudents(data.students ?? []))
+      .catch(() => {});
+  }, []);
+
+  // Demo personas with their live mastery (falls back to just the name until loaded)
+  const demos = DEMO_STUDENT_NAMES.map((demoName) => {
+    const match = students.find((s) => s.name.toLowerCase() === demoName.toLowerCase());
+    return {
+      name: demoName,
+      mastery: match?.overallMastery ?? null,
+    };
+  });
+  const describe = (mastery: number | null) =>
+    mastery === null ? "Demo student" : `${personaLabel(mastery)} (${Math.round(mastery * 100)}%)`;
 
   function pickTeacher() {
     saveTeacherSession();
@@ -82,6 +102,8 @@ export default function Home() {
       const data = await res.json();
       saveStudentSession(data.id, data.name);
       router.push("/dashboard");
+    } catch {
+      setError("Could not reach the server. Check your connection and try again.");
     } finally {
       setSubmitting(false);
     }
@@ -208,12 +230,7 @@ export default function Home() {
                     className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-slate-800 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100 transition-all font-medium"
                   />
                     <div className="flex flex-wrap gap-2 mt-2.5">
-                    {[
-                      { name: "Aarav Sharma", role: "Struggling (38%)" },
-                      { name: "Arjun", role: "High Achiever (76%)" },
-                      { name: "Diya", role: "Inconsistent (58%)" },
-                      { name: "Meera", role: "Mastered (82%)" },
-                    ].map((demo) => (
+                    {demos.map((demo) => (
                       <button
                         type="button"
                         key={demo.name}
@@ -224,7 +241,7 @@ export default function Home() {
                         className="text-xs px-3 py-1.5 rounded-xl font-medium bg-slate-100 hover:bg-blue-50 hover:text-blue-700 transition-colors flex items-center gap-1.5 cursor-pointer border border-slate-200"
                       >
                         <span className="font-bold">{demo.name}</span>
-                        <span className="text-[10px] text-slate-500 font-normal">({demo.role})</span>
+                        <span className="text-[10px] text-slate-500 font-normal">{describe(demo.mastery)}</span>
                       </button>
                     ))}
                   </div>
@@ -262,22 +279,20 @@ export default function Home() {
                 </span>
               </div>
               <div className="grid grid-cols-3 gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleStudentLogin("Aarav Sharma")}
-                  className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-left transition-colors cursor-pointer border border-slate-700/60"
-                >
-                  <p className="text-xs font-bold text-red-400">⚠️ Aarav Sharma</p>
-                  <p className="text-[10px] text-slate-400 mt-0.5">Struggling (38%)</p>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleStudentLogin("Arjun")}
-                  className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-left transition-colors cursor-pointer border border-slate-700/60"
-                >
-                  <p className="text-xs font-bold text-emerald-400">🌟 Arjun</p>
-                  <p className="text-[10px] text-slate-400 mt-0.5">Near-Mastery (76%)</p>
-                </button>
+                {demos.slice(0, 2).map((demo) => (
+                  <button
+                    key={demo.name}
+                    type="button"
+                    disabled={submitting}
+                    onClick={() => handleStudentLogin(demo.name)}
+                    className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-left transition-colors cursor-pointer border border-slate-700/60 disabled:opacity-60"
+                  >
+                    <p className={`text-xs font-bold ${demo.mastery === null ? "text-slate-200" : personaTone(demo.mastery)}`}>
+                      {demo.name}
+                    </p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">{describe(demo.mastery)}</p>
+                  </button>
+                ))}
                 <button
                   type="button"
                   onClick={pickTeacher}
@@ -415,7 +430,7 @@ export default function Home() {
       {/* Footer */}
       <footer id="about" className="py-8 px-6 sm:px-12 bg-white border-t border-slate-200 text-center text-xs text-slate-400">
         <p className="font-medium">
-          PathLearn © 2026 · Built for Erode Hackathon · Powered by Bayesian Knowledge Tracing & Next.js 15
+          PathLearn © 2026 · Built for Erode Hackathon · Powered by Bayesian Knowledge Tracing & Next.js 16
         </p>
       </footer>
 

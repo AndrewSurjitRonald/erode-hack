@@ -57,10 +57,15 @@ export async function getNextQuestion(
     const candidates = questions.filter(
       (q) => q.topicId === targetTopicId && q.difficulty === 2 && !askedQuestionIds.has(q.id)
     );
+    // Prefer unseen medium questions; fall back to any medium, then any question in the topic
+    const mediumInTopic = questions.filter((q) => q.topicId === targetTopicId && q.difficulty === 2);
     const pool =
       candidates.length > 0
         ? candidates
-        : questions.filter((q) => q.topicId === targetTopicId && q.difficulty === 2);
+        : mediumInTopic.length > 0
+        ? mediumInTopic
+        : questions.filter((q) => q.topicId === targetTopicId);
+    if (pool.length === 0) return null;
     const picked = pool[Math.floor(Math.random() * pool.length)];
 
     return {

@@ -5,10 +5,10 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Sidebar } from "@/components/Sidebar";
 import { ScratchpadModal } from "@/components/Scratchpad";
 import { getHintAndExplanation, detectCognitiveMisconception } from "@/lib/explanations";
-import { awardXP } from "@/lib/gamification";
+import { XP_CORRECT, XP_ATTEMPT } from "@/lib/gamification";
 import { triggerConfetti } from "@/components/Confetti";
 import { useI18n } from "@/lib/i18n";
-import { getStudentId, useStudentId } from "@/lib/session";
+import { getStudentId, useStudentId, clearSession } from "@/lib/session";
 import { IconCheck, IconX, IconLightbulb } from "@/lib/icons";
 
 type NextQuestion = {
@@ -34,6 +34,7 @@ type LlmExplanation = {
   steps: string[];
   misconception: string | null;
   source: "llm" | "fallback";
+  questionId: string;
 };
 
 const DIFFICULTY_META: Record<number, { key: "easy" | "medium" | "hard"; className: string }> = {
@@ -72,8 +73,40 @@ function PracticeContent() {
   const [llmExplanation, setLlmExplanation] = useState<LlmExplanation | null>(null);
   const [explainLoading, setExplainLoading] = useState(false);
 
+  // Only sets state after the request resolves, so it is safe to call from the mount effect
+  const fetchQuestion = useCallback(
+    (id: string) => {
+      const url = topicFilter
+        ? `/api/quiz/next?studentId=${id}&topicId=${topicFilter}`
+        : `/api/quiz/next?studentId=${id}`;
+      return fetch(url)
+        .then(async (res) => {
+          if (res.status === 401) {
+            // Saved student no longer exists (e.g. database reset)
+            clearSession();
+            router.replace("/");
+            return;
+          }
+          if (!res.ok) {
+            setError("You've answered every question available right now.");
+            setCurrent(null);
+            return;
+          }
+          const data: NextQuestion = await res.json();
+          setCurrent(data);
+          setReason(data.reason);
+        })
+        .catch(() => {
+          setError("Couldn't load the next question. Check that the server is running and try again.");
+          setCurrent(null);
+        })
+        .finally(() => setLoading(false));
+    },
+    [topicFilter, router]
+  );
+
   const loadNextQuestion = useCallback(
-    async (id: string) => {
+    (id: string) => {
       setLoading(true);
       setError(null);
       setSelectedIdx(null);
@@ -81,24 +114,9 @@ function PracticeContent() {
       setShowHint(false);
       setShowSteps(false);
       setLlmExplanation(null);
-      try {
-        const url = topicFilter
-          ? `/api/quiz/next?studentId=${id}&topicId=${topicFilter}`
-          : `/api/quiz/next?studentId=${id}`;
-        const res = await fetch(url);
-        if (!res.ok) {
-          setError("You've answered every question available right now.");
-          setCurrent(null);
-          return;
-        }
-        const data: NextQuestion = await res.json();
-        setCurrent(data);
-        setReason(data.reason);
-      } finally {
-        setLoading(false);
-      }
+      return fetchQuestion(id);
     },
-    [topicFilter]
+    [fetchQuestion]
   );
 
   useEffect(() => {
@@ -123,23 +141,8 @@ function PracticeContent() {
       })
       .catch(() => {});
 
-    const url = topicFilter
-      ? `/api/quiz/next?studentId=${id}&topicId=${topicFilter}`
-      : `/api/quiz/next?studentId=${id}`;
-
-    fetch(url)
-      .then(async (res) => {
-        if (!res.ok) {
-          setError("You've answered every question available right now.");
-          setCurrent(null);
-          return;
-        }
-        const data: NextQuestion = await res.json();
-        setCurrent(data);
-        setReason(data.reason);
-      })
-      .finally(() => setLoading(false));
-  }, [router, topicFilter]);
+    fetchQuestion(id);
+  }, [router, fetchQuestion]);
 
   async function handlePrimaryAction() {
     if (!studentId || !current) return;
@@ -157,15 +160,18 @@ function PracticeContent() {
             selectedIdx,
           }),
         });
+        if (!res.ok) {
+          // Leave the question in place so the student can retry the submission
+          console.error("Answer submission failed:", res.status);
+          return;
+        }
         const data: AnswerResult = await res.json();
         setResult(data);
 
-        // If correct, reward XP points & trigger confetti!
-        if (data.correct) {
-          awardXP(studentId, 20);
-          triggerConfetti();
-        }
+        // XP is derived server-side from attempts; celebrate correct answers
+        if (data.correct) triggerConfetti();
 
+        const questionId = current.question.id;
         setExplainLoading(true);
         fetch("/api/explain", {
           method: "POST",
@@ -179,8 +185,10 @@ function PracticeContent() {
             lang,
           }),
         })
-          .then((r) => r.json())
-          .then((explanation: LlmExplanation) => setLlmExplanation(explanation))
+          .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`explain ${r.status}`))))
+          .then((explanation: Omit<LlmExplanation, "questionId">) =>
+            setLlmExplanation({ ...explanation, questionId })
+          )
           .catch(() => {})
           .finally(() => setExplainLoading(false));
       } finally {
@@ -212,8 +220,11 @@ function PracticeContent() {
       )
     : null;
 
+  // Ignore an explanation that arrived after the student already moved on to another question
+  const explanation = llmExplanation?.questionId === current?.question.id ? llmExplanation : null;
+
   const misconception =
-    llmExplanation?.misconception ??
+    explanation?.misconception ??
     (result && !result.correct && current && selectedIdx !== null
       ? detectCognitiveMisconception(
           current.topic.name,
@@ -222,7 +233,7 @@ function PracticeContent() {
         )
       : null);
 
-  const steps = llmExplanation?.steps ?? solution?.steps ?? [];
+  const steps = explanation?.steps ?? solution?.steps ?? [];
 
   return (
     <div className="min-h-screen flex bg-[#F8FAFC]">
@@ -424,10 +435,12 @@ function PracticeContent() {
                       {result.correct ? (
                         <>
                           <IconCheck className="w-5 h-5" /> {t("correct_feedback")} ⭐
+                          <span className="text-xs font-bold text-amber-600">+{XP_CORRECT} XP</span>
                         </>
                       ) : (
                         <>
                           <IconX className="w-5 h-5" /> {t("incorrect_feedback")}
+                          <span className="text-xs font-bold text-slate-400">+{XP_ATTEMPT} XP</span>
                         </>
                       )}
                     </p>
@@ -494,7 +507,7 @@ function PracticeContent() {
                     <div className="bg-blue-50/60 border border-blue-100 rounded-2xl p-4 sm:p-5 animate-fade-in">
                       <p className="font-bold text-[#0F172A] text-sm mb-3 flex items-center gap-2">
                         Detailed Mathematical Derivation:
-                        {llmExplanation?.source === "llm" && (
+                        {explanation?.source === "llm" && (
                           <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">
                             AI-generated
                           </span>
@@ -560,10 +573,16 @@ function SkeletonQuestion() {
   );
 }
 
+// Remount per chapter so switching tabs starts from a clean question state
+function PracticeForTopic() {
+  const topic = useSearchParams().get("topic") ?? "all";
+  return <PracticeContent key={topic} />;
+}
+
 export default function PracticePage() {
   return (
     <Suspense fallback={null}>
-      <PracticeContent />
+      <PracticeForTopic />
     </Suspense>
   );
 }

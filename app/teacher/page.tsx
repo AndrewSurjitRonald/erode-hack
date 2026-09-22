@@ -78,20 +78,19 @@ export default function TeacherDashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [topicNames, setTopicNames] = useState<string[]>([]);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     fetch("/api/dashboard")
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`dashboard ${r.status}`);
+        return r.json();
+      })
       .then((d: DashboardData) => {
         setData(d);
-        const names = d.students[0]?.topicMastery.map((tItem) => tItem.topicName) ?? [
-          "Fractions",
-          "Ratios",
-          "Linear Equations",
-          "Percentages",
-        ];
-        setTopicNames(names);
+        setTopicNames(d.students[0]?.topicMastery.map((tItem) => tItem.topicName) ?? []);
       })
+      .catch(() => setLoadError(true))
       .finally(() => setLoading(false));
   }, []);
 
@@ -112,47 +111,57 @@ export default function TeacherDashboardPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            <select
-              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 outline-none focus:border-blue-600 shadow-xs cursor-pointer"
-              defaultValue="8a"
-            >
-              <option value="8a">Class 8 - A</option>
-              <option value="8b">Class 8 - B</option>
-            </select>
-            <div className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs sm:text-sm font-semibold text-slate-700 shadow-xs flex items-center gap-1.5 cursor-pointer">
-              <span>Sep 1, 2024 - Sep 22, 2024</span>
-              <span className="text-slate-400 text-xs">▼</span>
-            </div>
+            <span className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 shadow-xs">
+              {t("class_label")}
+            </span>
+            <span className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs sm:text-sm font-semibold text-emerald-700 shadow-xs flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              Live data
+            </span>
           </div>
         </header>
 
         {loading && <SkeletonTeacher />}
 
-        {!loading && data && (
+        {!loading && loadError && (
+          <div className="rounded-2xl bg-white border border-red-200 p-10 text-center shadow-xs">
+            <p className="font-bold text-[#0F172A] mb-1">Couldn&apos;t load class data</p>
+            <p className="text-sm text-slate-500">Check that the server and database are running, then refresh.</p>
+          </div>
+        )}
+
+        {!loading && data && data.students.length === 0 && (
+          <div className="rounded-2xl bg-white border border-slate-200 p-10 text-center shadow-xs">
+            <p className="font-bold text-[#0F172A] mb-1">No students yet</p>
+            <p className="text-sm text-slate-500">Students appear here once they sign in and start practicing.</p>
+          </div>
+        )}
+
+        {!loading && data && data.students.length > 0 && (
           <div className="flex flex-col gap-6 animate-fade-in">
             {/* Stat Cards */}
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
               <StatCard
                 label={t("students")}
-                value={String(data.students.length > 0 ? data.students.length : 32)}
+                value={String(data.students.length)}
                 icon={<IconUsers className="w-5 h-5" />}
                 tone="blue"
               />
               <StatCard
                 label={t("class_average")}
-                value={`${Math.round((data.classAverage || 0.68) * 100)}%`}
+                value={`${Math.round(data.classAverage * 100)}%`}
                 icon={<IconTrendingUp className="w-5 h-5" />}
                 tone="green"
               />
               <StatCard
                 label={t("at_risk")}
-                value={String(data.atRiskCount || 5)}
+                value={String(data.atRiskCount)}
                 icon={<IconAlertTriangle className="w-5 h-5" />}
                 tone="danger"
               />
               <StatCard
                 label={t("need_attention")}
-                value={String(data.needsAttentionCount || 2)}
+                value={String(data.needsAttentionCount)}
                 icon={<IconUser className="w-5 h-5" />}
                 tone="warning"
               />
@@ -167,7 +176,10 @@ export default function TeacherDashboardPage() {
             {/* Main Content Grid: Heatmap + Archetypes */}
             <div className="grid lg:grid-cols-12 gap-6 items-start">
               {/* Heatmap Card */}
-              <section className="lg:col-span-8 rounded-2xl bg-white border border-slate-200 p-6 shadow-xs overflow-hidden">
+              <section
+                id="students"
+                className="lg:col-span-8 rounded-2xl bg-white border border-slate-200 p-6 shadow-xs overflow-hidden scroll-mt-6"
+              >
                 <div className="mb-4">
                   <h2 className="font-bold text-[#0F172A] text-lg">{t("heatmap_title")}</h2>
                   <p className="text-xs sm:text-sm text-slate-500 mt-0.5">

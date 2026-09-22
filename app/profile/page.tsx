@@ -3,9 +3,16 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Sidebar } from "@/components/Sidebar";
-import { useStudentId, getStudentName, saveStudentSession, clearSession } from "@/lib/session";
+import {
+  useStudentId,
+  getStudentName,
+  saveStudentSession,
+  clearSession,
+  fetchStudentJson,
+} from "@/lib/session";
 import { useI18n } from "@/lib/i18n";
-import { getGamificationState, GamificationState } from "@/lib/gamification";
+import type { GamificationState } from "@/lib/gamification";
+import { DEMO_STUDENT_NAMES, personaLabel, StudentListItem } from "@/lib/persona";
 import { IconLogOut } from "@/lib/icons";
 
 interface StudentSummary {
@@ -14,6 +21,17 @@ interface StudentSummary {
   overallMastery: number;
   totalAttempts: number;
   accuracy: number;
+  gamification: GamificationState;
+}
+
+const GOAL_KEY = "lp_target_goal";
+
+function readGoal(): string {
+  try {
+    return localStorage.getItem(GOAL_KEY) ?? "80%";
+  } catch {
+    return "80%";
+  }
 }
 
 export default function StudentProfilePage() {
@@ -22,7 +40,16 @@ export default function StudentProfilePage() {
   const studentId = useStudentId();
   const [summary, setSummary] = useState<StudentSummary | null>(null);
   const [loading, setLoading] = useState(true);
-  const [targetGoal, setTargetGoal] = useState("80%");
+  // Goal buttons only render after loading, so reading storage here can't cause a hydration mismatch
+  const [targetGoal, setTargetGoal] = useState(readGoal);
+  const [students, setStudents] = useState<StudentListItem[]>([]);
+
+  useEffect(() => {
+    fetch("/api/student")
+      .then((r) => (r.ok ? r.json() : { students: [] }))
+      .then((data) => setStudents(data.students ?? []))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!studentId) {
@@ -33,15 +60,22 @@ export default function StudentProfilePage() {
       return;
     }
 
-    fetch(`/api/student/${studentId}/summary`)
-      .then((r) => r.json())
-      .then(setSummary)
+    fetchStudentJson<StudentSummary>(`/api/student/${studentId}/summary`, () => router.replace("/"))
+      .then((data) => data && setSummary(data))
+      .catch(() => {})
       .finally(() => setLoading(false));
   }, [studentId, router]);
 
-  const gamification: GamificationState | null = studentId
-    ? getGamificationState(studentId)
-    : null;
+  const gamification: GamificationState | null = summary?.gamification ?? null;
+
+  function chooseGoal(goal: string) {
+    setTargetGoal(goal);
+    try {
+      localStorage.setItem(GOAL_KEY, goal);
+    } catch {
+      // storage unavailable (private mode) — keep the in-memory choice
+    }
+  }
 
   async function handleSwitchStudent(demoName: string) {
     try {
@@ -209,7 +243,7 @@ export default function StudentProfilePage() {
                     {["75%", "80%", "90%"].map((pct) => (
                       <button
                         key={pct}
-                        onClick={() => setTargetGoal(pct)}
+                        onClick={() => chooseGoal(pct)}
                         className={`px-3 py-1.5 rounded-xl text-xs font-bold cursor-pointer transition-colors ${
                           targetGoal === pct
                             ? "bg-[#0F172A] text-white shadow-xs"
@@ -234,21 +268,32 @@ export default function StudentProfilePage() {
               </p>
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                {[
-                  { name: "Aarav Sharma", status: "Struggling (38%)" },
-                  { name: "Arjun", status: "High Achiever (76%)" },
-                  { name: "Diya", status: "Inconsistent (58%)" },
-                  { name: "Meera", status: "Mastered (82%)" },
-                ].map((demo) => (
-                  <button
-                    key={demo.name}
-                    onClick={() => handleSwitchStudent(demo.name)}
-                    className="p-3 rounded-2xl border border-slate-200 hover:border-blue-500 hover:bg-blue-50/40 text-left transition-all cursor-pointer"
-                  >
-                    <p className="font-bold text-xs text-[#0F172A]">{demo.name}</p>
-                    <p className="text-[10px] text-slate-500 mt-0.5">{demo.status}</p>
-                  </button>
-                ))}
+                {DEMO_STUDENT_NAMES.map((demoName) => {
+                  const match = students.find((s) => s.name.toLowerCase() === demoName.toLowerCase());
+                  const isCurrent = match?.id === studentId;
+                  return (
+                    <button
+                      key={demoName}
+                      disabled={isCurrent}
+                      onClick={() => handleSwitchStudent(demoName)}
+                      className={`p-3 rounded-2xl border text-left transition-all ${
+                        isCurrent
+                          ? "border-blue-500 bg-blue-50/60 cursor-default"
+                          : "border-slate-200 hover:border-blue-500 hover:bg-blue-50/40 cursor-pointer"
+                      }`}
+                    >
+                      <p className="font-bold text-xs text-[#0F172A]">
+                        {demoName}
+                        {isCurrent && <span className="ml-1 text-blue-600">(you)</span>}
+                      </p>
+                      <p className="text-[10px] text-slate-500 mt-0.5">
+                        {match
+                          ? `${personaLabel(match.overallMastery)} (${Math.round(match.overallMastery * 100)}%)`
+                          : "Demo student"}
+                      </p>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 

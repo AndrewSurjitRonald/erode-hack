@@ -43,16 +43,28 @@ export async function POST(req: Request) {
     if (!topicId || !text || !Array.isArray(options) || answerIdx === undefined) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
+    const cleanOptions = options.map((o: unknown) => String(o ?? "").trim());
+    if (cleanOptions.length < 2 || cleanOptions.some((o: string) => !o)) {
+      return NextResponse.json({ error: "Provide at least 2 non-empty options" }, { status: 400 });
+    }
+    const idx = Number(answerIdx);
+    if (!Number.isInteger(idx) || idx < 0 || idx >= cleanOptions.length) {
+      return NextResponse.json({ error: "answerIdx must point to one of the options" }, { status: 400 });
+    }
+    const topic = await prisma.topic.findUnique({ where: { id: String(topicId) } });
+    if (!topic) {
+      return NextResponse.json({ error: "Topic not found" }, { status: 400 });
+    }
 
     const created = await prisma.question.create({
       data: {
-        topicId,
+        topicId: topic.id,
         text: String(text).trim(),
-        options,
+        options: cleanOptions,
         textTa: typeof textTa === "string" ? textTa : "",
         optionsTa: Array.isArray(optionsTa) ? optionsTa : [],
-        answerIdx: Number(answerIdx),
-        difficulty: Number(difficulty) || 1,
+        answerIdx: idx,
+        difficulty: [1, 2, 3].includes(Number(difficulty)) ? Number(difficulty) : 1,
       },
     });
 

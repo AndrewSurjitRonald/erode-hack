@@ -4,9 +4,9 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Sidebar } from "@/components/Sidebar";
-import { getStudentId, useStudentId } from "@/lib/session";
+import { getStudentId, fetchStudentJson } from "@/lib/session";
 import { useI18n } from "@/lib/i18n";
-import { getGamificationState } from "@/lib/gamification";
+import type { GamificationState } from "@/lib/gamification";
 import { bandForScore, MASTERY_COLORS } from "@/lib/colors";
 import { IconArrowRight } from "@/lib/icons";
 
@@ -33,12 +33,12 @@ interface StudentSummary {
   totalAttempts: number;
   accuracy: number;
   recentAttempts: AttemptItem[];
+  gamification: GamificationState;
 }
 
 export default function StudentProgressPage() {
   const router = useRouter();
   const { t } = useI18n();
-  const studentId = useStudentId();
   const [summary, setSummary] = useState<StudentSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [showCertificate, setShowCertificate] = useState(false);
@@ -50,14 +50,17 @@ export default function StudentProgressPage() {
       return;
     }
 
-    fetch(`/api/student/${id}/summary`)
-      .then((r) => r.json())
-      .then(setSummary)
+    fetchStudentJson<StudentSummary>(`/api/student/${id}/summary`, () => router.replace("/"))
+      .then((data) => data && setSummary(data))
+      .catch(() => {})
       .finally(() => setLoading(false));
   }, [router]);
 
-  const gamification = studentId ? getGamificationState(studentId) : null;
+  const gamification = summary?.gamification ?? null;
   const overallPct = Math.round((summary?.overallMastery ?? 0.5) * 100);
+  const weakestTopic = summary?.topicMastery.length
+    ? [...summary.topicMastery].sort((a, b) => a.score - b.score)[0]
+    : null;
 
   return (
     <div className="min-h-screen flex bg-[#F8FAFC]">
@@ -117,7 +120,7 @@ export default function StudentProgressPage() {
                 <p className="text-3xl font-extrabold text-emerald-600 mt-1">
                   {summary?.accuracy ?? 0}%
                 </p>
-                <p className="text-xs text-emerald-600 font-medium mt-1">↑ Strong consistency</p>
+                <p className="text-xs text-slate-400 font-medium mt-1">Correct answers across all attempts</p>
               </div>
 
               <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs">
@@ -126,7 +129,7 @@ export default function StudentProgressPage() {
                   {gamification?.xp ?? 0} XP
                 </p>
                 <p className="text-xs text-slate-500 font-medium mt-1">
-                  🔥 {gamification?.streak ?? 1} Day Streak
+                  🔥 {gamification?.streak ?? 0} Day Streak
                 </p>
               </div>
             </div>
@@ -141,7 +144,7 @@ export default function StudentProgressPage() {
                   </p>
                 </div>
                 <Link
-                  href="/practice"
+                  href={weakestTopic ? `/practice?topic=${weakestTopic.topicId}` : "/practice"}
                   className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1"
                 >
                   Practice Weakest Topic <IconArrowRight className="w-3.5 h-3.5" />
