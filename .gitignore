@@ -39,3 +39,14 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+/app/generated/prisma
+
+# sqlite db (regenerate with prisma migrate + seed)
+/prisma/*.db
+/prisma/*.db-journal
+
+# python (ml training scripts — regenerate lib/models/*.json via scripts/train_*.py)
+/venv
+__pycache__/
+*.pyc

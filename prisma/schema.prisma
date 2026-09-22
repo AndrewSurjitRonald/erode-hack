@@ -1,0 +1,57 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Student {
+  id       String    @id @default(cuid())
+  name     String
+  attempts Attempt[]
+  mastery  Mastery[]
+}
+
+model Topic {
+  id        String     @id @default(cuid())
+  name      String
+  questions Question[]
+  mastery   Mastery[]
+}
+
+model Question {
+  id         String    @id @default(cuid())
+  topicId    String
+  topic      Topic     @relation(fields: [topicId], references: [id])
+  text       String
+  options    String // JSON stringified array of 4 options
+  answerIdx  Int
+  difficulty Int // 1, 2, or 3
+  attempts   Attempt[]
+}
+
+model Attempt {
+  id         String   @id @default(cuid())
+  studentId  String
+  student    Student  @relation(fields: [studentId], references: [id])
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id])
+  correct    Boolean
+  createdAt  DateTime @default(now())
+}
+
+model Mastery {
+  id        String  @id @default(cuid())
+  studentId String
+  student   Student @relation(fields: [studentId], references: [id])
+  topicId   String
+  topic     Topic   @relation(fields: [topicId], references: [id])
+  score     Float   @default(0.5) // 0 to 1, Elo-style running estimate
+
+  @@unique([studentId, topicId])
+}

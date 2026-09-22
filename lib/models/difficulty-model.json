@@ -1,0 +1,13 @@
+{
+  "weights": {
+    "mastery": 11.005146455257492,
+    "difficulty": -2.1973252063337183
+  },
+  "bias": -0.017284630420633943,
+  "evaluation": {
+    "testAccuracy": 0.878375,
+    "testRocAuc": 0.9495814823993323,
+    "bayesOptimalAccuracy": 0.878425,
+    "testSize": 40000
+  }
+}

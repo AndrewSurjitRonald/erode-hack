@@ -1,0 +1,17 @@
+{
+  "weights": {
+    "mastery": -28.177761722648302,
+    "aptitude": -1224.8911279115418,
+    "masterySq": -37.32157470896745,
+    "aptitudeSq": 708.0230767631308,
+    "masteryAptitude": 50.93398865309367
+  },
+  "bias": 538.7513312736379,
+  "minAttempts": 1,
+  "maxAttempts": 150,
+  "evaluation": {
+    "testR2": 0.8939254474189939,
+    "testMae": 6.110109724330001,
+    "testSize": 40000
+  }
+}
