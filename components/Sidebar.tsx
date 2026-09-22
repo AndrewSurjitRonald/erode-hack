@@ -28,7 +28,7 @@ export function Sidebar({ variant, activeItem }: { variant: SidebarVariant; acti
     { key: "practice", label: t("practice"), href: "/practice", icon: IconBookOpen },
     { key: "revision", label: t("revision"), href: "/revision", icon: IconFileText },
     { key: "progress", label: t("my_progress"), href: "/progress", icon: IconTrendingUp },
-    { key: "profile", label: t("profile"), href: "/progress", icon: IconUser },
+    { key: "profile", label: t("profile"), href: "/profile", icon: IconUser },
   ];
 
   const teacherNav = [
