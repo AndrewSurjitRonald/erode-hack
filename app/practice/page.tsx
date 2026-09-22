@@ -12,8 +12,8 @@ import { getStudentId, useStudentId } from "@/lib/session";
 import { IconCheck, IconX, IconLightbulb } from "@/lib/icons";
 
 type NextQuestion = {
-  question: { id: string; text: string; options: string[]; difficulty: number };
-  topic: { id: string; name: string };
+  question: { id: string; text: string; options: string[]; textTa: string; optionsTa: string[]; difficulty: number };
+  topic: { id: string; name: string; nameTa: string };
   reason: string;
   mode: "diagnostic" | "adaptive";
   questionNumber: number;
@@ -29,10 +29,10 @@ type AnswerResult = {
   topicName?: string;
 };
 
-const DIFFICULTY_META: Record<number, { label: string; className: string }> = {
-  1: { label: "Easy", className: "bg-emerald-50 text-emerald-700 border border-emerald-200" },
-  2: { label: "Medium", className: "bg-orange-50 text-orange-700 border border-orange-200" },
-  3: { label: "Hard", className: "bg-red-50 text-red-700 border border-red-200" },
+const DIFFICULTY_META: Record<number, { key: "easy" | "medium" | "hard"; className: string }> = {
+  1: { key: "easy", className: "bg-emerald-50 text-emerald-700 border border-emerald-200" },
+  2: { key: "medium", className: "bg-orange-50 text-orange-700 border border-orange-200" },
+  3: { key: "hard", className: "bg-red-50 text-red-700 border border-red-200" },
 };
 
 const TOPIC_BADGE_STYLE: Record<string, string> = {
@@ -44,12 +44,12 @@ const TOPIC_BADGE_STYLE: Record<string, string> = {
 
 function PracticeContent() {
   const router = useRouter();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const searchParams = useSearchParams();
   const topicFilter = searchParams.get("topic") ?? undefined;
 
   const studentId = useStudentId();
-  const [topicsList, setTopicsList] = useState<{ id: string; name: string }[]>([]);
+  const [topicsList, setTopicsList] = useState<{ id: string; name: string; nameTa: string }[]>([]);
   const [current, setCurrent] = useState<NextQuestion | null>(null);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [result, setResult] = useState<AnswerResult | null>(null);
@@ -103,9 +103,10 @@ function PracticeContent() {
       .then((data) => {
         if (data.topicMastery) {
           setTopicsList(
-            data.topicMastery.map((tm: { topicId: string; topicName: string }) => ({
+            data.topicMastery.map((tm: { topicId: string; topicName: string; topicNameTa: string }) => ({
               id: tm.topicId,
               name: tm.topicName,
+              nameTa: tm.topicNameTa,
             }))
           );
         }
@@ -166,6 +167,14 @@ function PracticeContent() {
   const totalCount = isDiagnostic ? current.totalDiagnostic : 15;
   const progressPct = current ? (current.questionNumber / totalCount) * 100 : 0;
 
+  const displayText =
+    lang === "ta" && current?.question.textTa ? current.question.textTa : current?.question.text ?? "";
+  const displayOptions =
+    lang === "ta" && current?.question.optionsTa.length === current?.question.options.length
+      ? current!.question.optionsTa
+      : current?.question.options ?? [];
+  const displayTopicName = lang === "ta" && current?.topic.nameTa ? current.topic.nameTa : current?.topic.name ?? "";
+
   // Math explanation calculation
   const solution = current
     ? getHintAndExplanation(
@@ -222,7 +231,7 @@ function PracticeContent() {
         {/* Chapter Selection Bar */}
         <div className="flex flex-wrap items-center gap-2 mb-6 bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs">
           <span className="text-[11px] font-extrabold uppercase text-slate-400 mr-1 tracking-wider">
-            Practice Chapter:
+            {t("practice_chapter")}
           </span>
           <button
             onClick={() => router.push("/practice")}
@@ -232,7 +241,7 @@ function PracticeContent() {
                 : "bg-slate-100 text-slate-600 hover:bg-slate-200"
             }`}
           >
-            🎯 All Chapters (Adaptive)
+            🎯 {t("all_chapters")}
           </button>
           {topicsList.map((tItem) => (
             <button
@@ -244,7 +253,7 @@ function PracticeContent() {
                   : "bg-slate-100 text-slate-600 hover:bg-slate-200"
               }`}
             >
-              {tItem.name}
+              {lang === "ta" && tItem.nameTa ? tItem.nameTa : tItem.name}
             </button>
           ))}
         </div>
@@ -267,7 +276,7 @@ function PracticeContent() {
               <div className="flex items-center justify-between mb-2">
                 <span />
                 <span className="text-xs font-bold text-slate-500">
-                  Question {current.questionNumber} of {totalCount}
+                  {t("question_of", { n: current.questionNumber, total: totalCount })}
                 </span>
               </div>
               <div className="h-2 w-full rounded-full bg-slate-100 overflow-hidden mb-6">
@@ -284,7 +293,7 @@ function PracticeContent() {
                     TOPIC_BADGE_STYLE[current.topic.name] ?? "bg-blue-50 text-blue-700 border border-blue-200"
                   }`}
                 >
-                  {current.topic.name}
+                  {displayTopicName}
                 </span>
                 {!isDiagnostic && (
                   <span
@@ -292,19 +301,19 @@ function PracticeContent() {
                       DIFFICULTY_META[current.question.difficulty]?.className ?? ""
                     }`}
                   >
-                    {DIFFICULTY_META[current.question.difficulty]?.label ?? "Medium"}
+                    {t(DIFFICULTY_META[current.question.difficulty]?.key ?? "medium")}
                   </span>
                 )}
               </div>
 
               {/* Question Text */}
               <h2 className="text-xl sm:text-2xl font-bold text-[#0F172A] mb-6 leading-snug">
-                {current.question.text}
+                {displayText}
               </h2>
 
               {/* Options */}
               <div className="flex flex-col gap-3">
-                {current.question.options.map((opt, idx) => {
+                {displayOptions.map((opt, idx) => {
                   const isSelected = selectedIdx === idx;
                   const isCorrectOpt = result && idx === result.correctIdx;
                   const isWrongSelected = result && isSelected && !result.correct;
@@ -361,7 +370,7 @@ function PracticeContent() {
                     className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 hover:text-amber-800 cursor-pointer"
                   >
                     <span>💡</span>
-                    <span>{showHint ? "Hide Hint" : t("need_hint")}</span>
+                    <span>{showHint ? t("hide_hint") : t("need_hint")}</span>
                   </button>
 
                   {showHint && (
@@ -383,11 +392,11 @@ function PracticeContent() {
                     >
                       {result.correct ? (
                         <>
-                          <IconCheck className="w-5 h-5" /> Correct! (+20 XP ⭐)
+                          <IconCheck className="w-5 h-5" /> {t("correct_feedback")} ⭐
                         </>
                       ) : (
                         <>
-                          <IconX className="w-5 h-5" /> Not quite.
+                          <IconX className="w-5 h-5" /> {t("incorrect_feedback")}
                         </>
                       )}
                     </p>
@@ -398,7 +407,7 @@ function PracticeContent() {
                         onClick={() => setShowSteps(!showSteps)}
                         className="text-xs font-bold text-blue-600 hover:underline cursor-pointer"
                       >
-                        {showSteps ? "Hide Steps" : "📝 Step-by-Step Solution"}
+                        📝 {showSteps ? t("hide_steps") : t("step_by_step")}
                       </button>
                     )}
                   </div>
@@ -485,7 +494,7 @@ function PracticeContent() {
                 {result
                   ? t("next")
                   : submitting
-                  ? "Checking…"
+                  ? t("checking")
                   : isDiagnostic
                   ? t("next")
                   : t("submit")}

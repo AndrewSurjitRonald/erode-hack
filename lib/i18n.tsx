@@ -7,7 +7,7 @@ export type Language = "en" | "ta";
 type I18nContextType = {
   lang: Language;
   setLang: (lang: Language) => void;
-  t: (key: string) => string;
+  t: (key: string, vars?: Record<string, string | number>) => string;
 };
 
 const DICTIONARY: Record<Language, Record<string, string>> = {
@@ -60,6 +60,18 @@ const DICTIONARY: Record<Language, Record<string, string>> = {
     assign_homework: "Assign Targeted Revision",
     streak: "Day Streak",
     xp_points: "XP Earned",
+    easy: "Easy",
+    medium: "Medium",
+    hard: "Hard",
+    all_chapters: "All Chapters (Adaptive)",
+    practice_chapter: "Practice Chapter:",
+    question_of: "Question {n} of {total}",
+    correct_feedback: "Correct! (+20 XP)",
+    incorrect_feedback: "Not quite.",
+    checking: "Checking…",
+    hide_hint: "Hide Hint",
+    step_by_step: "Step-by-Step Solution",
+    hide_steps: "Hide Steps",
   },
   ta: {
     welcome_back: "மீண்டும் வருக",
@@ -110,6 +122,18 @@ const DICTIONARY: Record<Language, Record<string, string>> = {
     assign_homework: "வீட்டுப்பாடம் ஒதுக்கு",
     streak: "நாள் தொடர்ச்சி",
     xp_points: "பெற்ற புள்ளிகள் (XP)",
+    easy: "எளிது",
+    medium: "நடுத்தரம்",
+    hard: "கடினம்",
+    all_chapters: "அனைத்து பாடங்களும் (தகவமைவு)",
+    practice_chapter: "பயிற்சி பாடம்:",
+    question_of: "கேள்வி {n} / {total}",
+    correct_feedback: "சரியானது! (+20 XP)",
+    incorrect_feedback: "சரியில்லை.",
+    checking: "சரிபார்க்கிறது…",
+    hide_hint: "குறிப்பை மறை",
+    step_by_step: "படிப்படியான தீர்வு",
+    hide_steps: "படிகளை மறை",
   },
 };
 
@@ -152,8 +176,14 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  function t(key: string): string {
-    return DICTIONARY[lang]?.[key] ?? DICTIONARY.en[key] ?? key;
+  function t(key: string, vars?: Record<string, string | number>): string {
+    let str = DICTIONARY[lang]?.[key] ?? DICTIONARY.en[key] ?? key;
+    if (vars) {
+      for (const [k, v] of Object.entries(vars)) {
+        str = str.replace(`{${k}}`, String(v));
+      }
+    }
+    return str;
   }
 
   return (

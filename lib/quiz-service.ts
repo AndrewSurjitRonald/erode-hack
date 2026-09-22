@@ -15,9 +15,11 @@ export type NextQuestionPayload = {
     id: string;
     text: string;
     options: string[];
+    textTa: string;
+    optionsTa: string[];
     difficulty: number;
   };
-  topic: { id: string; name: string };
+  topic: { id: string; name: string; nameTa: string };
   reason: string;
   mode: "diagnostic" | "adaptive";
   questionNumber: number;
@@ -66,9 +68,11 @@ export async function getNextQuestion(
         id: picked.id,
         text: picked.text,
         options: picked.options,
+        textTa: picked.textTa,
+        optionsTa: picked.optionsTa,
         difficulty: picked.difficulty,
       },
-      topic: { id: targetTopic.id, name: targetTopic.name },
+      topic: { id: targetTopic.id, name: targetTopic.name, nameTa: targetTopic.nameTa },
       reason: `Diagnostic question ${totalAttempts + 1} of ${diagnosticTotal} for ${
         targetTopic.name
       } — establishing your baseline.`,
@@ -119,9 +123,11 @@ export async function getNextQuestion(
       id: fullQuestion.id,
       text: fullQuestion.text,
       options: fullQuestion.options,
+      textTa: fullQuestion.textTa,
+      optionsTa: fullQuestion.optionsTa,
       difficulty: fullQuestion.difficulty,
     },
-    topic: { id: target.topicId, name: target.topicName },
+    topic: { id: target.topicId, name: target.topicName, nameTa: topics.find((t) => t.id === target.topicId)!.nameTa },
     reason: target.reason,
     mode: "adaptive",
     questionNumber,

@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getWeakTopics, MasteryState } from "@/lib/adaptive-engine";
 
-export type TopicMastery = { topicId: string; topicName: string; score: number };
+export type TopicMastery = { topicId: string; topicName: string; topicNameTa: string; score: number };
 
 export async function getStudentTopicMastery(studentId: string): Promise<TopicMastery[]> {
   const topics = await prisma.topic.findMany({ orderBy: { name: "asc" } });
@@ -11,6 +11,7 @@ export async function getStudentTopicMastery(studentId: string): Promise<TopicMa
   return topics.map((t) => ({
     topicId: t.id,
     topicName: t.name,
+    topicNameTa: t.nameTa,
     score: byTopic.get(t.id) ?? 0.5,
   }));
 }

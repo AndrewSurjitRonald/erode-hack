@@ -11,6 +11,7 @@ import { IconChevronRight, IconCheckCircle } from "@/lib/icons";
 type WeakTopic = {
   topicId: string;
   topicName: string;
+  topicNameTa: string;
   mastery: number;
   status: "Weak" | "Needs Practice";
   recentAccuracy: string;
@@ -37,7 +38,7 @@ const HOW_IT_WORKS = [
 
 export default function RevisionPage() {
   const router = useRouter();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const [weakTopics, setWeakTopics] = useState<WeakTopic[] | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -109,7 +110,9 @@ export default function RevisionPage() {
                             {iconStyle.icon}
                           </span>
                           <div>
-                            <p className="font-bold text-[#0F172A] text-base">{tItem.topicName}</p>
+                            <p className="font-bold text-[#0F172A] text-base">
+                              {lang === "ta" && tItem.topicNameTa ? tItem.topicNameTa : tItem.topicName}
+                            </p>
                             <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
                               Current mastery: {tItem.mastery}% · ~{tItem.attemptsToMastery} question
                               {tItem.attemptsToMastery === 1 ? "" : "s"} to mastery

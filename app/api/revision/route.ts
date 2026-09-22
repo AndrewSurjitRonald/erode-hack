@@ -28,6 +28,9 @@ export async function GET(req: NextRequest) {
     include: { question: true },
   });
 
+  const topics = await prisma.topic.findMany();
+  const nameTaById = new Map(topics.map((topic) => [topic.id, topic.nameTa]));
+
   const weakTopics = weak.map((t) => {
     const topicAttempts = attempts.filter((a) => a.question.topicId === t.topicId);
     const correct = topicAttempts.filter((a) => a.correct).length;
@@ -41,6 +44,7 @@ export async function GET(req: NextRequest) {
     return {
       topicId: t.topicId,
       topicName: t.topicName,
+      topicNameTa: nameTaById.get(t.topicId) ?? "",
       mastery: Math.round(t.score * 100),
       status: t.score < 0.4 ? ("Weak" as const) : ("Needs Practice" as const),
       recentAccuracy,

@@ -20,6 +20,7 @@ model Student {
 model Topic {
   id        String     @id @default(cuid())
   name      String
+  nameTa    String     @default("") // Tamil translation of `name`
   questions Question[]
   mastery   Mastery[]
 }
@@ -30,6 +31,8 @@ model Question {
   topic      Topic     @relation(fields: [topicId], references: [id])
   text       String
   options    String[] // 4 option strings
+  textTa     String    @default("") // Tamil translation of `text`, "" if untranslated
+  optionsTa  String[]  @default([]) // Tamil translations of `options`, same order, [] if untranslated
   answerIdx  Int
   difficulty Int // 1, 2, or 3
   attempts   Attempt[]
