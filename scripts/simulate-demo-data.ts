@@ -1,9 +1,7 @@
 /**
- * Simulates a handful of students playing through the adaptive quiz, so the
- * teacher dashboard has varied, realistic-looking data for a demo instead of
- * an empty state. Runs directly against Prisma + the adaptive engine (the
- * same logic the API routes use) rather than over HTTP, since the real quiz
- * API never reveals the correct answer to a client.
+ * Simulates demo students playing through the adaptive quiz matching the mockup
+ * names and scores (Arjun, Aarav Sharma, Diya, Karan, Meera, Rohit), so the
+ * teacher dashboard and student view have authentic, live data.
  *
  * Usage: npx tsx scripts/simulate-demo-data.ts
  */
@@ -14,25 +12,67 @@ import { updateMastery } from "../lib/adaptive-engine";
 type Profile = {
   name: string;
   rounds: number;
-  // probability of a correct answer, keyed by topic name; "default" applies elsewhere
   skill: Record<string, number>;
 };
 
 const profiles: Profile[] = [
   {
-    name: "Aisha Khan",
-    rounds: 25,
-    skill: { default: 0.85, Ratios: 0.75 },
+    name: "Aarav Sharma",
+    rounds: 24,
+    skill: {
+      default: 0.75,
+      Fractions: 0.85,
+      Percentages: 0.80,
+      Ratios: 0.65,
+      "Linear Equations": 0.40,
+    },
   },
   {
-    name: "Rahul Verma",
-    rounds: 22,
-    skill: { default: 0.55, Ratios: 0.2, "Linear Equations": 0.35 },
-  },
-  {
-    name: "Meera Iyer",
+    name: "Arjun",
     rounds: 20,
-    skill: { default: 0.4, Percentages: 0.25, Fractions: 0.3 },
+    skill: {
+      default: 0.70,
+      Fractions: 0.78,
+      Percentages: 0.72,
+      Ratios: 0.60,
+      "Linear Equations": 0.45,
+    },
+  },
+  {
+    name: "Diya",
+    rounds: 18,
+    skill: {
+      default: 0.82,
+      Fractions: 0.88,
+      Ratios: 0.80,
+    },
+  },
+  {
+    name: "Karan",
+    rounds: 16,
+    skill: {
+      default: 0.35,
+      "Linear Equations": 0.25,
+      Ratios: 0.30,
+    },
+  },
+  {
+    name: "Meera",
+    rounds: 18,
+    skill: {
+      default: 0.60,
+      Fractions: 0.75,
+      "Linear Equations": 0.35,
+    },
+  },
+  {
+    name: "Rohit",
+    rounds: 15,
+    skill: {
+      default: 0.48,
+      Percentages: 0.40,
+      Ratios: 0.50,
+    },
   },
 ];
 
@@ -72,19 +112,27 @@ async function main() {
   const topics = await prisma.topic.findMany();
 
   for (const profile of profiles) {
-    const student = await prisma.student.create({ data: { name: profile.name } });
-    await prisma.mastery.createMany({
-      data: topics.map((t) => ({ studentId: student.id, topicId: t.id, score: 0.5 })),
-    });
-    console.log(`Created ${profile.name} (${student.id})`);
+    let student = await prisma.student.findFirst({ where: { name: profile.name } });
+    if (!student) {
+      const created = await prisma.student.create({ data: { name: profile.name } });
+      await prisma.mastery.createMany({
+        data: topics.map((t) => ({ studentId: created.id, topicId: t.id, score: 0.5 })),
+      });
+      student = created;
+      console.log(`Created ${profile.name} (${student.id})`);
+    } else {
+      console.log(`Found existing ${profile.name} (${student.id})`);
+    }
 
-    for (let i = 0; i < profile.rounds; i++) {
+    const currentAttempts = await prisma.attempt.count({ where: { studentId: student.id } });
+    const roundsToPlay = Math.max(0, profile.rounds - currentAttempts);
+    for (let i = 0; i < roundsToPlay; i++) {
       await playRound(student.id, profile);
     }
-    console.log(`  played ${profile.rounds} rounds`);
+    console.log(`  completed rounds (total attempts: ${currentAttempts + roundsToPlay})`);
   }
 
-  console.log("\nDone. Refresh /teacher to see results.");
+  console.log("\nDone seeding mock demo students.");
 }
 
 main()

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Sidebar } from "@/components/Sidebar";
 import { getStudentId } from "@/lib/session";
-import { topicIcon } from "@/lib/topic-icons";
+import { useI18n } from "@/lib/i18n";
 import { IconChevronRight, IconCheckCircle } from "@/lib/icons";
 
 type WeakTopic = {
@@ -17,8 +17,15 @@ type WeakTopic = {
 };
 
 const STATUS_STYLE: Record<WeakTopic["status"], string> = {
-  Weak: "bg-red-100 text-red-600",
-  "Needs Practice": "bg-amber-100 text-amber-700",
+  Weak: "bg-red-50 text-red-600 border border-red-200",
+  "Needs Practice": "bg-amber-50 text-amber-700 border border-amber-200",
+};
+
+const TOPIC_ICON_STYLE: Record<string, { bg: string; text: string; icon: string }> = {
+  "Linear Equations": { bg: "bg-purple-100", text: "text-purple-700", icon: "📐" },
+  Ratios: { bg: "bg-blue-100", text: "text-blue-700", icon: "⚖️" },
+  Fractions: { bg: "bg-orange-100", text: "text-orange-700", icon: "½" },
+  Percentages: { bg: "bg-teal-100", text: "text-teal-700", icon: "%" },
 };
 
 const HOW_IT_WORKS = [
@@ -29,6 +36,7 @@ const HOW_IT_WORKS = [
 
 export default function RevisionPage() {
   const router = useRouter();
+  const { t } = useI18n();
   const [weakTopics, setWeakTopics] = useState<WeakTopic[] | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -40,88 +48,117 @@ export default function RevisionPage() {
     }
     fetch(`/api/revision?studentId=${id}`)
       .then((r) => r.json())
-      .then((data) => setWeakTopics(data.weakTopics))
+      .then((data) => {
+        setWeakTopics(data.weakTopics ?? []);
+      })
+      .catch(() => {
+        setWeakTopics([]);
+      })
       .finally(() => setLoading(false));
   }, [router]);
 
   const topPick = weakTopics && weakTopics.length > 0 ? weakTopics[0] : null;
 
   return (
-    <div className="flex flex-1">
+    <div className="min-h-screen flex bg-[#F8FAFC]">
       <Sidebar variant="student" activeItem="revision" />
-      <main className="flex-1 px-6 sm:px-10 py-8 max-w-3xl">
+
+      <main className="flex-1 px-6 sm:px-10 lg:px-12 py-8 max-w-4xl">
         <header className="mb-6">
-          <h1 className="text-2xl font-extrabold text-dark">Your Revision Plan</h1>
-          <p className="text-muted mt-1">Focused practice for your weak topics.</p>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-[#0F172A] tracking-tight">
+            {t("revision_plan")}
+          </h1>
+          <p className="text-slate-500 text-sm sm:text-base mt-1">
+            Focused practice for your weak topics.
+          </p>
         </header>
 
         {loading && (
-          <div className="animate-pulse flex flex-col gap-3">
-            <div className="h-20 bg-card-bg rounded-xl" />
-            <div className="h-20 bg-card-bg rounded-xl" />
+          <div className="animate-pulse flex flex-col gap-4">
+            <div className="h-24 bg-slate-200 rounded-2xl" />
+            <div className="h-24 bg-slate-200 rounded-2xl" />
           </div>
         )}
 
         {!loading && weakTopics && (
           <div className="flex flex-col gap-6 animate-fade-in">
-            {weakTopics.length > 0 && (
-              <div>
-                <h2 className="text-sm font-bold text-muted uppercase tracking-wide mb-3">
-                  Topics to Focus On
-                </h2>
+            {/* Topics to Focus On List */}
+            <div>
+              <h2 className="text-sm font-bold text-[#0F172A] mb-3">
+                Topics to Focus On
+              </h2>
+              {weakTopics.length > 0 ? (
                 <div className="flex flex-col gap-3">
-                  {weakTopics.map((t) => (
-                    <Link
-                      key={t.topicId}
-                      href={`/practice?topic=${t.topicId}`}
-                      className="flex items-center gap-4 rounded-xl border border-border p-4 hover:border-primary hover:shadow-sm transition-all"
-                    >
-                      <span className="shrink-0 w-11 h-11 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xl">
-                        {topicIcon(t.topicName)}
-                      </span>
-                      <div className="flex-1">
-                        <p className="font-bold text-dark">{t.topicName}</p>
-                        <p className="text-sm text-muted">Current mastery: {t.mastery}%</p>
-                      </div>
-                      <span
-                        className={`rounded-full px-3 py-1 text-xs font-bold whitespace-nowrap ${
-                          STATUS_STYLE[t.status]
-                        }`}
+                  {weakTopics.map((tItem) => {
+                    const iconStyle = TOPIC_ICON_STYLE[tItem.topicName] ?? {
+                      bg: "bg-blue-100",
+                      text: "text-blue-700",
+                      icon: "📚",
+                    };
+                    return (
+                      <Link
+                        key={tItem.topicId}
+                        href={`/practice?topic=${tItem.topicId}`}
+                        className="group flex items-center justify-between bg-white rounded-2xl border border-slate-200 p-5 hover:border-blue-400 hover:shadow-xs transition-all"
                       >
-                        {t.status}
-                      </span>
-                      <IconChevronRight className="w-5 h-5 text-muted shrink-0" />
-                    </Link>
-                  ))}
+                        <div className="flex items-center gap-4">
+                          <span
+                            className={`w-11 h-11 rounded-xl flex items-center justify-center text-lg font-bold shrink-0 ${iconStyle.bg} ${iconStyle.text}`}
+                          >
+                            {iconStyle.icon}
+                          </span>
+                          <div>
+                            <p className="font-bold text-[#0F172A] text-base">{tItem.topicName}</p>
+                            <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
+                              Current mastery: {tItem.mastery}%
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          <span
+                            className={`rounded-full px-3 py-1 text-xs font-semibold whitespace-nowrap ${
+                              STATUS_STYLE[tItem.status]
+                            }`}
+                          >
+                            {tItem.status}
+                          </span>
+                          <IconChevronRight className="w-5 h-5 text-slate-400 group-hover:text-slate-700 transition-colors" />
+                        </div>
+                      </Link>
+                    );
+                  })}
                 </div>
-              </div>
-            )}
+              ) : (
+                <div className="rounded-2xl bg-white border border-slate-200 p-10 text-center shadow-xs">
+                  <p className="text-3xl mb-2">🎉</p>
+                  <p className="font-bold text-[#0F172A] text-base mb-1">
+                    No weak topics right now
+                  </p>
+                  <p className="text-sm text-slate-500 max-w-sm mx-auto">
+                    Keep practicing — topics will be flagged here as soon as they require extra attention.
+                  </p>
+                </div>
+              )}
+            </div>
 
-            {weakTopics.length === 0 && (
-              <div className="rounded-xl bg-card-bg border border-border p-10 text-center">
-                <p className="text-3xl mb-2">🎉</p>
-                <p className="font-bold text-dark mb-1">No weak topics right now</p>
-                <p className="text-sm text-muted max-w-sm mx-auto">
-                  Keep practicing — we&apos;ll flag topics here once we have enough data on you.
-                </p>
-              </div>
-            )}
-
-            <div className="rounded-xl bg-accent/10 border border-accent/30 p-5">
-              <p className="font-bold text-dark mb-3">How it works</p>
-              <ul className="flex flex-col gap-2">
+            {/* How it works Card */}
+            <div className="rounded-2xl bg-emerald-50/70 border border-emerald-100/80 p-6 sm:p-7 shadow-xs">
+              <h3 className="font-bold text-[#0F172A] text-base mb-3">How it works</h3>
+              <ul className="flex flex-col gap-2.5">
                 {HOW_IT_WORKS.map((item) => (
-                  <li key={item} className="flex items-center gap-2.5 text-sm text-ink">
-                    <IconCheckCircle className="w-4 h-4 text-secondary shrink-0" />
+                  <li key={item} className="flex items-center gap-3 text-sm text-slate-700 font-medium">
+                    <IconCheckCircle className="w-4.5 h-4.5 text-emerald-600 shrink-0" />
                     {item}
                   </li>
                 ))}
               </ul>
             </div>
 
+            {/* Start Revision CTA */}
             <Link
               href={topPick ? `/practice?topic=${topPick.topicId}` : "/practice"}
-              className="w-full text-center rounded-xl bg-primary text-white font-bold py-3.5 hover:bg-dark transition-colors"
+              className="w-full text-center rounded-xl bg-[#0F172A] hover:bg-slate-800 text-white font-bold py-3.5 transition-all shadow-xs cursor-pointer block"
             >
               Start Revision →
             </Link>

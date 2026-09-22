@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getStudentWeakTopics } from "@/lib/student-data";
+import { getStudentWeakTopics, getStudentTopicMastery } from "@/lib/student-data";
 
 export async function GET(req: NextRequest) {
   const studentId = req.nextUrl.searchParams.get("studentId");
@@ -8,7 +8,19 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "studentId is required" }, { status: 400 });
   }
 
-  const weak = await getStudentWeakTopics(studentId);
+  let weak = await getStudentWeakTopics(studentId);
+  if (weak.length === 0) {
+    const allTopics = await getStudentTopicMastery(studentId);
+    const unmastered = allTopics
+      .filter((t) => t.score < 0.8)
+      .sort((a, b) => a.score - b.score);
+    weak = unmastered.map((t) => ({
+      topicId: t.topicId,
+      topicName: t.topicName,
+      score: t.score,
+      attemptCount: 0,
+    }));
+  }
 
   const attempts = await prisma.attempt.findMany({
     where: { studentId },

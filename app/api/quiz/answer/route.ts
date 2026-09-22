@@ -18,7 +18,10 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const question = await prisma.question.findUnique({ where: { id: questionId } });
+  const question = await prisma.question.findUnique({
+    where: { id: questionId },
+    include: { topic: true },
+  });
   if (!question) {
     return NextResponse.json({ error: "Question not found" }, { status: 404 });
   }
@@ -46,6 +49,10 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     correct,
     correctIdx: question.answerIdx,
+    priorScore: currentScore,
+    newScore,
+    scoreDelta: newScore - currentScore,
+    topicName: question.topic.name,
     updatedMastery,
   });
 }

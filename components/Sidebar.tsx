@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Logo } from "@/components/Logo";
 import { clearSession } from "@/lib/session";
+import { useI18n, LanguageToggle } from "@/lib/i18n";
 import {
   IconHome,
   IconBookOpen,
@@ -18,31 +19,26 @@ import {
 
 export type SidebarVariant = "student" | "teacher";
 
-type NavItem = {
-  key: string;
-  label: string;
-  href: string;
-  icon: (props: { className?: string }) => React.ReactElement;
-};
-
-const STUDENT_NAV: NavItem[] = [
-  { key: "home", label: "Home", href: "/dashboard", icon: IconHome },
-  { key: "practice", label: "Practice", href: "/practice", icon: IconBookOpen },
-  { key: "revision", label: "Revision", href: "/revision", icon: IconFileText },
-  { key: "progress", label: "My Progress", href: "/dashboard", icon: IconTrendingUp },
-  { key: "profile", label: "Profile", href: "/dashboard", icon: IconUser },
-];
-
-const TEACHER_NAV: NavItem[] = [
-  { key: "dashboard", label: "Dashboard", href: "/teacher", icon: IconHome },
-  { key: "students", label: "Students", href: "/teacher", icon: IconUsers },
-  { key: "insights", label: "Class Insights", href: "/teacher", icon: IconBarChart },
-  { key: "resources", label: "Resources", href: "/teacher", icon: IconLightbulb },
-];
-
 export function Sidebar({ variant, activeItem }: { variant: SidebarVariant; activeItem: string }) {
   const router = useRouter();
-  const items = variant === "student" ? STUDENT_NAV : TEACHER_NAV;
+  const { t } = useI18n();
+
+  const studentNav = [
+    { key: "home", label: t("home"), href: "/dashboard", icon: IconHome },
+    { key: "practice", label: t("practice"), href: "/practice", icon: IconBookOpen },
+    { key: "revision", label: t("revision"), href: "/revision", icon: IconFileText },
+    { key: "progress", label: t("my_progress"), href: "/progress", icon: IconTrendingUp },
+    { key: "profile", label: t("profile"), href: "/progress", icon: IconUser },
+  ];
+
+  const teacherNav = [
+    { key: "dashboard", label: t("dashboard"), href: "/teacher", icon: IconHome },
+    { key: "students", label: t("students"), href: "/teacher#students", icon: IconUsers },
+    { key: "insights", label: t("class_insights"), href: "/teacher/class-insights", icon: IconBarChart },
+    { key: "resources", label: t("resources"), href: "/teacher/resources", icon: IconLightbulb },
+  ];
+
+  const items = variant === "student" ? studentNav : teacherNav;
 
   function handleLogout() {
     clearSession();
@@ -50,12 +46,12 @@ export function Sidebar({ variant, activeItem }: { variant: SidebarVariant; acti
   }
 
   return (
-    <aside className="hidden lg:flex flex-col w-[220px] shrink-0 bg-dark min-h-screen sticky top-0 py-6 px-4">
-      <div className="px-2 mb-8">
-        <Logo light />
+    <aside className="hidden lg:flex flex-col w-[240px] shrink-0 bg-white border-r border-slate-200 min-h-screen sticky top-0 py-6 px-4">
+      <div className="px-3 mb-8">
+        <Logo />
       </div>
 
-      <nav className="flex-1 flex flex-col gap-1">
+      <nav className="flex-1 flex flex-col gap-1.5">
         {items.map((item) => {
           const isActive = item.key === activeItem;
           const Icon = item.icon;
@@ -63,26 +59,32 @@ export function Sidebar({ variant, activeItem }: { variant: SidebarVariant; acti
             <Link
               key={item.key}
               href={item.href}
-              className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors ${
+              className={`flex items-center gap-3.5 rounded-xl px-3.5 py-2.5 text-sm font-semibold transition-all ${
                 isActive
-                  ? "bg-white/10 text-white border-l-4 border-accent pl-2.5"
-                  : "text-white/60 hover:text-white hover:bg-white/5"
+                  ? "bg-blue-50 text-blue-600 shadow-xs"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
               }`}
             >
-              <Icon className="w-4.5 h-4.5 shrink-0" />
+              <Icon className={`w-4.5 h-4.5 shrink-0 ${isActive ? "text-blue-600" : "text-slate-400 group-hover:text-slate-600"}`} />
               {item.label}
             </Link>
           );
         })}
       </nav>
 
-      <button
-        onClick={handleLogout}
-        className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-white/50 hover:text-white hover:bg-white/5 transition-colors"
-      >
-        <IconLogOut className="w-4.5 h-4.5 shrink-0" />
-        Log out
-      </button>
+      {/* Language Switcher & Logout */}
+      <div className="pt-4 border-t border-slate-100 flex flex-col gap-3">
+        <div className="px-2">
+          <LanguageToggle />
+        </div>
+        <button
+          onClick={handleLogout}
+          className="flex items-center gap-3.5 w-full rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-500 hover:text-slate-900 hover:bg-slate-50 transition-colors cursor-pointer"
+        >
+          <IconLogOut className="w-4.5 h-4.5 shrink-0 text-slate-400" />
+          {t("logout")}
+        </button>
+      </div>
     </aside>
   );
 }

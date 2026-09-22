@@ -18,6 +18,26 @@ export async function GET(
   const weakTopics = await getStudentWeakTopics(id);
   const questionCount = await prisma.question.count();
 
+  const attempts = await prisma.attempt.findMany({
+    where: { studentId: id },
+    include: { question: { include: { topic: true } } },
+    orderBy: { createdAt: "desc" },
+    take: 20,
+  });
+
+  const totalAttempts = await prisma.attempt.count({ where: { studentId: id } });
+  const correctAttempts = await prisma.attempt.count({ where: { studentId: id, correct: true } });
+  const accuracy = totalAttempts > 0 ? Math.round((correctAttempts / totalAttempts) * 100) : 0;
+
+  const recentAttempts = attempts.map((a) => ({
+    id: a.id,
+    questionText: a.question.text,
+    topicName: a.question.topic.name,
+    difficulty: a.question.difficulty,
+    correct: a.correct,
+    createdAt: a.createdAt,
+  }));
+
   return NextResponse.json({
     name: student.name,
     className: CLASS_LABEL,
@@ -25,5 +45,8 @@ export async function GET(
     topicMastery,
     hasNextQuestion: questionCount > 0,
     weakTopicCount: weakTopics.length,
+    totalAttempts,
+    accuracy,
+    recentAttempts,
   });
 }

@@ -8,12 +8,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Name is required" }, { status: 400 });
   }
 
-  const student = await prisma.student.create({ data: { name } });
-
-  const topics = await prisma.topic.findMany();
-  await prisma.mastery.createMany({
-    data: topics.map((t) => ({ studentId: student.id, topicId: t.id, score: 0.5 })),
+  let student = await prisma.student.findFirst({
+    where: { name: { equals: name, mode: "insensitive" } },
+    orderBy: { attempts: { _count: "desc" } },
   });
+
+  if (!student) {
+    const created = await prisma.student.create({ data: { name } });
+    const topics = await prisma.topic.findMany();
+    await prisma.mastery.createMany({
+      data: topics.map((t) => ({ studentId: created.id, topicId: t.id, score: 0.5 })),
+    });
+    student = created;
+  }
 
   return NextResponse.json({ id: student.id, name: student.name });
 }
