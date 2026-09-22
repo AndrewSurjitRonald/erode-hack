@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Sidebar } from "@/components/Sidebar";
-import { getStudentId } from "@/lib/session";
+import { getStudentId, useStudentId } from "@/lib/session";
 import { useI18n } from "@/lib/i18n";
 import { getGamificationState } from "@/lib/gamification";
 import { bandForScore, MASTERY_COLORS } from "@/lib/colors";
@@ -38,12 +38,7 @@ interface StudentSummary {
 export default function StudentProgressPage() {
   const router = useRouter();
   const { t } = useI18n();
-  const [studentId] = useState<string | null>(() => {
-    if (typeof window !== "undefined") {
-      return getStudentId();
-    }
-    return null;
-  });
+  const studentId = useStudentId();
   const [summary, setSummary] = useState<StudentSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [showCertificate, setShowCertificate] = useState(false);

@@ -6,7 +6,7 @@ import Link from "next/link";
 import { Sidebar } from "@/components/Sidebar";
 import { MasteryRing } from "@/components/MasteryRing";
 import { GamificationBar } from "@/components/GamificationBar";
-import { getStudentId, getStudentName } from "@/lib/session";
+import { useStudentId, getStudentId, getStudentName } from "@/lib/session";
 import { useI18n } from "@/lib/i18n";
 import { IconBookOpen, IconFileText, IconArrowRight } from "@/lib/icons";
 
@@ -44,12 +44,7 @@ const TOPIC_COLORS: Record<string, string> = {
 export default function StudentDashboardPage() {
   const router = useRouter();
   const { t } = useI18n();
-  const [studentId] = useState<string | null>(() => {
-    if (typeof window !== "undefined") {
-      return getStudentId();
-    }
-    return null;
-  });
+  const studentId = useStudentId();
   const [summary, setSummary] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(true);
 

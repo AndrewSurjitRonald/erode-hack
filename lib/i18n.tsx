@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState } from "react";
+import React, { createContext, useContext, useSyncExternalStore } from "react";
 
 export type Language = "en" | "ta";
 
@@ -119,24 +119,41 @@ const I18nContext = createContext<I18nContextType>({
   t: (k) => k,
 });
 
+function subscribeLang(callback: () => void) {
+  if (typeof window !== "undefined") {
+    window.addEventListener("storage", callback);
+    window.addEventListener("pathlearn_lang_change", callback);
+    return () => {
+      window.removeEventListener("storage", callback);
+      window.removeEventListener("pathlearn_lang_change", callback);
+    };
+  }
+  return () => {};
+}
+
+function getStoredLang(): Language {
+  if (typeof window === "undefined") return "en";
+  const saved = localStorage.getItem("pathlearn_lang");
+  if (saved === "en" || saved === "ta") return saved;
+  return "en";
+}
+
+function getServerLang(): Language {
+  return "en";
+}
+
 export function I18nProvider({ children }: { children: React.ReactNode }) {
-  const [lang, setLangState] = useState<Language>(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("pathlearn_lang") as Language | null;
-      if (saved === "en" || saved === "ta") {
-        return saved;
-      }
-    }
-    return "en";
-  });
+  const lang = useSyncExternalStore(subscribeLang, getStoredLang, getServerLang);
 
   function setLang(newLang: Language) {
-    setLangState(newLang);
-    localStorage.setItem("pathlearn_lang", newLang);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("pathlearn_lang", newLang);
+      window.dispatchEvent(new Event("pathlearn_lang_change"));
+    }
   }
 
   function t(key: string): string {
-    return DICTIONARY[lang][key] ?? DICTIONARY.en[key] ?? key;
+    return DICTIONARY[lang]?.[key] ?? DICTIONARY.en[key] ?? key;
   }
 
   return (

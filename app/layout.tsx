@@ -18,7 +18,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${inter.variable} h-full`}>
+    <html lang="en" suppressHydrationWarning className={`${inter.variable} h-full`}>
       <body className="min-h-full flex flex-col bg-page-bg font-sans text-ink antialiased">
         <I18nProvider>
           {children}
