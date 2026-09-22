@@ -25,14 +25,31 @@ exported as plain JSON and read at runtime with zero Python dependency.
 ## Quickstart
 
 ```bash
+# 1. Install dependencies
 npm install
-npx prisma migrate dev   # applies schema to Postgres
+
+# 2. Setup environment variables
+cp .env.example .env
+
+# 3. Start database (Choose Option A or Option B):
+# Option A (Easiest - Docker):
+docker compose up -d
+
+# Option B (Local Mac Postgres):
+# brew services start postgresql
+# createdb erodehack
+# (ensure DATABASE_URL in .env matches: postgresql://<your-username>@localhost:5432/erodehack)
+
+# 4. Apply schema and seed initial questions
+npx prisma db push
 npm run seed              # loads 4 topics x 10 questions
-npm run dev                # http://localhost:3000
+
+# 5. Start dev server
+npm run dev                # http://localhost:3000 (or 3001)
 ```
 
 Requires a running Postgres instance and `DATABASE_URL` set in `.env`
-(see [docs/DATABASE.md](docs/DATABASE.md) for local setup). No API keys
+(see [docs/DATABASE.md](docs/DATABASE.md) for detailed credentials setup & troubleshooting). No API keys
 required — there is no external LLM call in this build.
 
 To populate the teacher dashboard with realistic-looking data before a demo:

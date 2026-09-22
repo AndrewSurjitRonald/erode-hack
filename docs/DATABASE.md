@@ -65,26 +65,77 @@ at the application boundary in `lib/quiz-service.ts` and `prisma/seed.ts`.
 the `@@unique` constraint — `lib/adaptive-engine.ts`'s `updateMastery()`
 result is written via `prisma.mastery.upsert()` against that same key.
 
-## Local setup (Postgres via Homebrew)
+## Local setup options
 
+### Option A: Docker Compose (Recommended — Zero Configuration)
+If you have Docker installed, this starts PostgreSQL with the credentials configured out-of-the-box:
 ```bash
-brew install postgresql@18
-brew services start postgresql@18
+docker compose up -d
+```
+Then copy the example env:
+```bash
+cp .env.example .env
+# DATABASE_URL is already preset to: postgresql://postgres:postgres@localhost:5432/erodehack
+npx prisma db push
+npm run seed
+```
+
+### Option B: Local Postgres (Homebrew on macOS)
+```bash
+brew install postgresql@16   # or postgresql@18
+brew services start postgresql@16
 createdb erodehack
 ```
 
-`.env`:
+In `.env`:
 ```
 DATABASE_URL="postgresql://<your-macos-username>@localhost:5432/erodehack"
 ```
-
-Local Homebrew Postgres uses trust auth for the local Unix user by
-default, so no password is needed in the connection string.
+*Note: Find your macOS username by running `whoami` in terminal. Homebrew Postgres uses trust auth for the local Unix user by default (no password).*
 
 ```bash
-npx prisma migrate dev   # applies prisma/migrations/ to the erodehack database
-npm run seed              # runs prisma/seed.ts — loads 4 topics x 10 questions
+npx prisma db push
+npm run seed
 ```
+
+---
+
+## Troubleshooting: "Please make sure to provide valid database credentials"
+
+If Prisma outputs:
+> `Authentication failed against database server at 'localhost', the provided database credentials for '...' are not valid. Please make sure to provide valid database credentials for the database server at the configured address.` (Prisma error `P1000`)
+
+Here is how to fix it on your machine:
+
+1. **Check if PostgreSQL is running:**
+   ```bash
+   pg_isready
+   # Or on macOS Homebrew:
+   brew services list
+   ```
+   If it is stopped, start it: `brew services start postgresql@16` or `docker compose up -d`.
+
+2. **Verify your username & password:**
+   - On macOS Homebrew: Run `whoami`. If your username is `johndoe`, your connection string must be:
+     `DATABASE_URL="postgresql://johndoe@localhost:5432/erodehack"` (no password).
+   - If using standard PostgreSQL with a `postgres` superuser password (e.g. `mypassword`):
+     `DATABASE_URL="postgresql://postgres:mypassword@localhost:5432/erodehack"`
+   - If using Docker Compose:
+     `DATABASE_URL="postgresql://postgres:postgres@localhost:5432/erodehack"`
+
+3. **Verify the database exists:**
+   ```bash
+   # Create database if it does not exist:
+   createdb erodehack
+   # Or via psql:
+   psql -U postgres -c "CREATE DATABASE erodehack;"
+   ```
+
+4. **Test connecting with psql directly:**
+   ```bash
+   psql "postgresql://<USER>:<PASS>@localhost:5432/erodehack"
+   ```
+   Once `psql` connects successfully, run `npx prisma db push && npm run seed`.
 
 ## Connecting with DBeaver
 
