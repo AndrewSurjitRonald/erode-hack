@@ -198,8 +198,8 @@ function PracticeContent() {
   const displayText =
     lang === "ta" && current?.question.textTa ? current.question.textTa : current?.question.text ?? "";
   const displayOptions =
-    lang === "ta" && current?.question.optionsTa.length === current?.question.options.length
-      ? current!.question.optionsTa
+    current && lang === "ta" && current.question.optionsTa.length === current.question.options.length
+      ? current.question.optionsTa
       : current?.question.options ?? [];
   const displayTopicName = lang === "ta" && current?.topic.nameTa ? current.topic.nameTa : current?.topic.name ?? "";
 
