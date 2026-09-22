@@ -8,7 +8,7 @@ import { getHintAndExplanation, detectCognitiveMisconception } from "@/lib/expla
 import { awardXP } from "@/lib/gamification";
 import { triggerConfetti } from "@/components/Confetti";
 import { useI18n } from "@/lib/i18n";
-import { getStudentId } from "@/lib/session";
+import { getStudentId, useStudentId } from "@/lib/session";
 import { IconCheck, IconX, IconLightbulb } from "@/lib/icons";
 
 type NextQuestion = {
@@ -48,12 +48,7 @@ function PracticeContent() {
   const searchParams = useSearchParams();
   const topicFilter = searchParams.get("topic") ?? undefined;
 
-  const [studentId] = useState<string | null>(() => {
-    if (typeof window !== "undefined") {
-      return getStudentId();
-    }
-    return null;
-  });
+  const studentId = useStudentId();
   const [current, setCurrent] = useState<NextQuestion | null>(null);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [result, setResult] = useState<AnswerResult | null>(null);
@@ -147,11 +142,9 @@ function PracticeContent() {
         setSubmitting(false);
       }
     } else {
-      loadNextQuestion(studentId);
+      if (studentId) loadNextQuestion(studentId);
     }
   }
-
-  if (!studentId) return null;
 
   const isDiagnostic = current?.mode === "diagnostic";
   const totalCount = isDiagnostic ? current.totalDiagnostic : 15;
