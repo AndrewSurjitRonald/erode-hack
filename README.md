@@ -50,7 +50,10 @@ npm run dev                # http://localhost:3000 (or 3001)
 
 Requires a running Postgres instance and `DATABASE_URL` set in `.env`
 (see [docs/DATABASE.md](docs/DATABASE.md) for detailed credentials setup & troubleshooting). No API keys
-required — there is no external LLM call in this build.
+are required to run the app. Optionally, set `GROQ_API_KEY` in `.env` to enable AI-generated,
+question-specific step-by-step solutions and misconception diagnosis on the practice page
+(`app/api/explain/route.ts`, via the [Groq API](https://console.groq.com)) — without it, the app falls
+back to the static per-topic explanations in `lib/explanations.ts`.
 
 To populate the teacher dashboard with realistic-looking data before a demo:
 
@@ -98,3 +101,12 @@ ranking (`/teacher/class-insights`'s Class Focus panel), and an
 at-risk/declining-trend detector (`/teacher`'s heatmap flag). See
 [docs/ML-MODELS.md](docs/ML-MODELS.md) for the full picture, including honest
 accuracy numbers and where each model's fit is genuinely strong vs. weak.
+
+Separately — and distinct from the five trained models above, which are all
+scikit-learn — the practice page's step-by-step solution and misconception
+diagnosis are LLM-generated per question via the Groq API
+(`app/api/explain/route.ts`, model `llama-3.3-70b-versatile`), when
+`GROQ_API_KEY` is set. Topic and difficulty selection stay deterministic;
+only this one explanatory feature calls an LLM, and it degrades to the
+static per-topic text in `lib/explanations.ts` if the key is absent or the
+call fails.

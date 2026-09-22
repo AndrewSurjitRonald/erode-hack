@@ -307,3 +307,55 @@ reuses Model 5's `estimateTrend()` helper against the student's own recent
 attempts. `recentAttempts` returns up to 30, newest-first.
 
 **Response `404`:** `{ "error": "Student not found" }`
+
+---
+
+## `POST /api/explain`
+
+Generates a question-specific step-by-step solution and, if the student
+answered incorrectly, a misconception diagnosis — powers the "Step-by-Step
+Solution" panel on `/practice`, called right after `/api/quiz/answer`
+returns.
+
+**File:** `app/api/explain/route.ts`
+
+**Request body:**
+```json
+{
+  "questionText": "2/3 + 1/6 = ?",
+  "topicName": "Fractions",
+  "options": ["5/6", "3/9", "1/2", "4/6"],
+  "correctIdx": 0,
+  "selectedIdx": 2,
+  "lang": "en"
+}
+```
+`selectedIdx` is `null`/omitted when the student answered correctly (no
+misconception to diagnose). `lang` is `"en"` or `"ta"` — the response
+strings come back in that language.
+
+**Response `200`:**
+```json
+{
+  "hint": "Find a common denominator before adding.",
+  "steps": [
+    "The denominators are 3 and 6.",
+    "The LCM of 3 and 6 is 6, so rewrite 2/3 as 4/6.",
+    "4/6 + 1/6 = 5/6."
+  ],
+  "misconception": "You likely added the denominators directly (3 + 6 = 9) instead of finding their LCM.",
+  "source": "llm"
+}
+```
+This is the one place in the app that calls an external LLM (the Groq API
+via `groq-sdk`, model `llama-3.3-70b-versatile`, JSON-object response mode
+with a hand-written shape check — no structured-output schema enforcement)
+— everything else (question selection, difficulty, mastery tracking, the
+five trained ML models) is either deterministic or a local scikit-learn
+model. When `GROQ_API_KEY` is unset, the response doesn't parse as JSON, or
+it doesn't match the expected `{hint, steps, misconception}` shape, this
+route falls back to the static per-topic text in `lib/explanations.ts` and
+returns `"source": "fallback"` instead of `"llm"` — the route never errors
+out just because the key is missing or the model misbehaves.
+
+**Response `400`:** `{ "error": "Missing required fields" }`

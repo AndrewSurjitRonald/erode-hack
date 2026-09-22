@@ -29,6 +29,13 @@ type AnswerResult = {
   topicName?: string;
 };
 
+type LlmExplanation = {
+  hint: string;
+  steps: string[];
+  misconception: string | null;
+  source: "llm" | "fallback";
+};
+
 const DIFFICULTY_META: Record<number, { key: "easy" | "medium" | "hard"; className: string }> = {
   1: { key: "easy", className: "bg-emerald-50 text-emerald-700 border border-emerald-200" },
   2: { key: "medium", className: "bg-orange-50 text-orange-700 border border-orange-200" },
@@ -62,6 +69,8 @@ function PracticeContent() {
   const [showScratchpad, setShowScratchpad] = useState(false);
   const [showHint, setShowHint] = useState(false);
   const [showSteps, setShowSteps] = useState(false);
+  const [llmExplanation, setLlmExplanation] = useState<LlmExplanation | null>(null);
+  const [explainLoading, setExplainLoading] = useState(false);
 
   const loadNextQuestion = useCallback(
     async (id: string) => {
@@ -71,6 +80,7 @@ function PracticeContent() {
       setResult(null);
       setShowHint(false);
       setShowSteps(false);
+      setLlmExplanation(null);
       try {
         const url = topicFilter
           ? `/api/quiz/next?studentId=${id}&topicId=${topicFilter}`
@@ -155,6 +165,24 @@ function PracticeContent() {
           awardXP(studentId, 20);
           triggerConfetti();
         }
+
+        setExplainLoading(true);
+        fetch("/api/explain", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            questionText: displayText,
+            topicName: current.topic.name,
+            options: displayOptions,
+            correctIdx: data.correctIdx,
+            selectedIdx: data.correct ? null : selectedIdx,
+            lang,
+          }),
+        })
+          .then((r) => r.json())
+          .then((explanation: LlmExplanation) => setLlmExplanation(explanation))
+          .catch(() => {})
+          .finally(() => setExplainLoading(false));
       } finally {
         setSubmitting(false);
       }
@@ -185,13 +213,16 @@ function PracticeContent() {
     : null;
 
   const misconception =
-    result && !result.correct && current && selectedIdx !== null
+    llmExplanation?.misconception ??
+    (result && !result.correct && current && selectedIdx !== null
       ? detectCognitiveMisconception(
           current.topic.name,
           current.question.options[selectedIdx],
           current.question.options[result.correctIdx]
         )
-      : null;
+      : null);
+
+  const steps = llmExplanation?.steps ?? solution?.steps ?? [];
 
   return (
     <div className="min-h-screen flex bg-[#F8FAFC]">
@@ -459,18 +490,26 @@ function PracticeContent() {
                   </p>
 
                   {/* Step-by-Step Explanation */}
-                  {showSteps && solution && (
+                  {showSteps && (
                     <div className="bg-blue-50/60 border border-blue-100 rounded-2xl p-4 sm:p-5 animate-fade-in">
-                      <p className="font-bold text-[#0F172A] text-sm mb-3">
+                      <p className="font-bold text-[#0F172A] text-sm mb-3 flex items-center gap-2">
                         Detailed Mathematical Derivation:
+                        {llmExplanation?.source === "llm" && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">
+                            AI-generated
+                          </span>
+                        )}
                       </p>
                       <ol className="list-decimal list-inside flex flex-col gap-2 text-xs sm:text-sm text-slate-700">
-                        {solution.steps.map((st, i) => (
+                        {steps.map((st, i) => (
                           <li key={i} className="leading-relaxed">
                             {st}
                           </li>
                         ))}
                       </ol>
+                      {explainLoading && (
+                        <p className="text-[11px] text-slate-400 mt-2">Refining with AI…</p>
+                      )}
                     </div>
                   )}
                 </div>

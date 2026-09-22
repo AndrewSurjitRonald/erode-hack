@@ -128,11 +128,13 @@ templates depending on which branch of `selectTargetTopic()` produced it:
 "Focused Practice: Ratios (Current Mastery: 22%)."   // "Practice this" / restrictToTopicId mode
 ```
 
-This is a template string (not an LLM call — an earlier plan considered
-calling Claude per-question for this, but that was never wired in; see the
-"What's genuinely ML" note in the root README). It's shown on the student
-practice UI as a named feature so the reasoning behind each question is
-never opaque.
+This is a template string, not an LLM call — topic/difficulty selection
+stays deterministic and free to run. (A separate, genuinely LLM-backed
+feature exists elsewhere: the per-question step-by-step solution and
+misconception diagnosis shown after an answer is submitted, via
+`app/api/explain/route.ts` — see the "What's genuinely ML" note in the
+root README.) The `reason` string is shown on the student practice UI as
+a named feature so the reasoning behind each question is never opaque.
 
 ### Picking the specific question: no-repeat rule
 
