@@ -14,36 +14,79 @@ with a trained ML model" — it genuinely is one, just not a microservice.
 
 ```
 app/
-  page.tsx                    Landing page (role picker: Student / Teacher)
-  quiz/page.tsx                Student quiz UI (diagnostic + adaptive)
+  page.tsx                     Landing page (role picker: Student / Teacher)
+  practice/page.tsx            Student practice UI (diagnostic + adaptive),
+                                 formerly quiz/page.tsx
   revision/page.tsx            Student's weak-topic list + "Practice this"
-  dashboard/page.tsx           Teacher heatmap + student drill-down
+                                 + time-to-mastery estimate (Model 3)
+  dashboard/page.tsx           Student's own home dashboard (progress rings,
+                                 gamification bar, shortcuts) — NOT the
+                                 teacher view, despite the name
+  profile/page.tsx             Student profile page
+  progress/page.tsx            Student progress page
+  teacher/page.tsx              Teacher class dashboard: heatmap + archetype
+                                 donut + declining-trend badges (Model 5)
+  teacher/class-insights/page.tsx  Cohort diagnostics + Class Focus panel
+                                 (Model 4) + persona distribution
+  teacher/resources/page.tsx    Question bank management (create/view
+                                 questions per topic)
+  teacher/students/[id]/page.tsx  Per-student drill-down for teachers
   api/
-    student/route.ts            POST create student, GET list students
-    student/[id]/route.ts       GET one student's masteries/weak topics/attempts
-    quiz/next/route.ts          GET next question (diagnostic or adaptive)
-    quiz/answer/route.ts        POST an answer, updates Attempt + Mastery
-    dashboard/route.ts          GET all students shaped for the heatmap
+    student/route.ts             POST create-or-find student (case-
+                                   insensitive name match), GET list students
+    student/[id]/summary/route.ts  GET one student's masteries, weak topics,
+                                   attempts, and generated insights — powers
+                                   the student dashboard/profile
+    dashboard/route.ts            GET all students shaped for the teacher
+                                   heatmap: archetype (Model 2), at-risk
+                                   topics (Model 5), class-wide topic
+                                   priority ranking (Model 4)
+    dashboard/student/[id]/route.ts  GET one student's detail for the
+                                   teacher drill-down view
+    quiz/next/route.ts            GET next question (diagnostic or adaptive)
+    quiz/answer/route.ts          POST an answer, updates Attempt + Mastery
+    revision/route.ts             GET a student's weak topics with
+                                   attempts-to-mastery estimate (Model 3)
+    questions/route.ts            GET/POST the question bank (teacher
+                                   resources page)
 
 lib/
   prisma.ts                    Prisma client singleton
-  session.ts                   Client-side localStorage session (no auth)
-  colors.ts                    Mastery color-band mapping (status palette)
-  adaptive-engine.ts            Core algorithm: pure functions, no DB access
-  quiz-service.ts               DB-aware layer: wraps adaptive-engine with
+  session.ts                    Client-side localStorage session (no auth)
+  colors.ts                     Mastery color-band mapping (status palette)
+  brand.ts                      Shared copy constants (e.g. CLASS_LABEL)
+  archetype.ts                  Builds the fixed-order mastery vector and
+                                 calls Model 2's assignArchetype()
+  student-data.ts               Shared per-student query helpers (mastery,
+                                 weak topics, attempt counts) used by
+                                 multiple API routes
+  insights.ts                   Generates plain-English insight strings for
+                                 the student summary endpoint — also reuses
+                                 Model 5's estimateTrend() helper
+  gamification.ts                Streaks/XP/badge logic for GamificationBar
+  explanations.ts                Hand-written per-topic hint/step-by-step
+                                 text shown after an incorrect answer (not
+                                 ML — a lookup table, unlike selectDifficulty)
+  topic-icons.ts                  Emoji icon per topic name, for UI badges
+  adaptive-engine.ts             Core algorithm: pure functions, no DB access
+  quiz-service.ts                DB-aware layer: wraps adaptive-engine with
                                  Prisma queries, handles the diagnostic phase
   ml/
     difficulty-model.ts          Inference for Model 1 (wired into engine)
-    cluster-model.ts             Inference for Model 2 (wired into dashboard)
-    time-to-mastery-model.ts     Inference for Model 3 (trained, not wired)
-    topic-priority-model.ts      Inference for Model 4 (trained, not wired)
-    at-risk-model.ts             Inference for Model 5 (trained, not wired)
+    cluster-model.ts             Inference for Model 2 (wired into
+                                   /teacher's heatmap)
+    time-to-mastery-model.ts     Inference for Model 3 (wired into /revision)
+    topic-priority-model.ts      Inference for Model 4 (wired into
+                                   /teacher/class-insights)
+    at-risk-model.ts             Inference for Model 5 (wired into
+                                   /teacher's declining-trend badge)
   models/
     *.json                       Trained weights, one file per model
 
 prisma/
   schema.prisma                 Data model (Student, Topic, Question, Attempt, Mastery)
-  seed.ts                       Loads the 4 topics x 10 questions
+  seed.ts                       Loads the 4 topics x 10 questions, idempotent
+                                 per topic (safe to re-run)
   migrations/                   SQL migration history
 
 scripts/
@@ -52,7 +95,7 @@ scripts/
   test-*.ts                     TypeScript: sanity-checks each ml/*.ts layer
   test-engine.ts                Simulates 30 attempts through the adaptive
                                  engine, prints the mastery trajectory
-  simulate-demo-data.ts          Plays 3 fake students through the real
+  simulate-demo-data.ts          Plays fake students through the real
                                  engine (via Prisma directly) to seed a
                                  realistic-looking teacher dashboard
 
@@ -61,24 +104,32 @@ data/
                                  script generates (200k rows each)
 
 components/
-  MasteryBar.tsx                 Animated per-topic mastery bar (quiz page)
+  Sidebar.tsx                    Student/teacher nav shell
+  MasteryRing.tsx                Per-topic/overall mastery ring (student
+                                 dashboard), successor to MasteryBar
+  ArchetypeDonut.tsx              Archetype distribution chart (Model 2)
+  GamificationBar.tsx             Streaks/XP/badges strip
+  Confetti.tsx, GrowthIllustration.tsx, Logo.tsx, PitchDeckModal.tsx,
+  Scratchpad.tsx                  Supporting UI
 ```
 
 ## Request flow: a student answers a question
 
 ```
-Browser (app/quiz/page.tsx)
+Browser (app/practice/page.tsx)
   -> GET /api/quiz/next?studentId=...
        app/api/quiz/next/route.ts
          -> lib/quiz-service.ts: getNextQuestion()
               - counts the student's total attempts
-              - if < 8: diagnostic phase (see ADAPTIVE-ENGINE.md)
+              - if < topics.length x 2: diagnostic phase (see ADAPTIVE-ENGINE.md)
               - else: adaptive phase
                   -> lib/adaptive-engine.ts: selectTargetTopic()
+                       - weighted interleaved sampling over unmastered
+                         topics, not pure greedy weakest-first
                        -> lib/ml/difficulty-model.ts: selectDifficulty()
                             (Model 1 — logistic regression inference)
                   -> lib/adaptive-engine.ts: selectQuestion()
-       <- { question, reason, phase }
+       <- { question, topic, reason, mode, questionNumber, totalDiagnostic }
   -> student picks an option
   -> POST /api/quiz/answer { studentId, questionId, selectedIdx }
        app/api/quiz/answer/route.ts
@@ -86,27 +137,38 @@ Browser (app/quiz/page.tsx)
            to the client) to determine correct/incorrect
          - lib/adaptive-engine.ts: updateMastery() — Elo-style update
          - upserts the Mastery row in Postgres
-       <- { correct, correctIdx, mastery }
+       <- { correct, correctIdx, priorScore, newScore, scoreDelta,
+            topicName, updatedMastery }
   -> mastery bar animates, feedback + reason shown
 ```
 
 ## Request flow: teacher dashboard
 
 ```
-Browser (app/dashboard/page.tsx)
+Browser (app/teacher/page.tsx, app/teacher/class-insights/page.tsx)
   -> GET /api/dashboard
        app/api/dashboard/route.ts
-         - fetches all students with their Mastery rows
+         - fetches all students with their Mastery rows and Attempt history
          - builds a 4-number mastery vector per student, in the FIXED
            topic order the cluster model was trained on (Fractions,
            Ratios, Linear Equations, Percentages) — order matters here,
            since it must match training time exactly
          -> lib/ml/cluster-model.ts: assignArchetype()
               (Model 2 — nearest-centroid KMeans inference)
-         - computes weak topics per student (lib/adaptive-engine.ts)
-       <- { topics, students: [{ masteryByTopic, archetype, weakTopics, ... }] }
-  -> heatmap renders (color-coded cells, archetype badge per student)
-  -> clicking a student -> GET /api/student/[id] for attempt history
+         - for each student x topic: lib/ml/at-risk-model.ts estimateTrend()
+           + isAtRisk() over their last 10 attempts on that topic
+              (Model 5 — declining-trend detector)
+         - aggregates class-wide avgMastery / pctStruggling / stdMastery
+           per topic, then lib/ml/topic-priority-model.ts rankTopicsByPriority()
+              (Model 4 — class-wide instructional priority)
+       <- { students: [{ archetype, topicMastery, atRiskTopics, isAtRisk }],
+            classAverage, atRiskCount, needsAttentionCount, decliningCount,
+            topicPriority }
+  -> /teacher renders the heatmap (color-coded cells, archetype badge,
+     declining-trend flag per student)
+  -> /teacher/class-insights renders the Class Focus panel from topicPriority
+  -> clicking a student -> GET /api/dashboard/student/[id] for the teacher
+     drill-down (a separate endpoint from the student's own summary)
 ```
 
 ## No authentication, by design

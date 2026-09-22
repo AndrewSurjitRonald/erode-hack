@@ -6,7 +6,9 @@ no authentication — `studentId` is a plain `cuid()` the client holds in
 
 ## `POST /api/student`
 
-Creates a student and seeds a `Mastery` row (score `0.5`) for every topic.
+Creates a student (or returns an existing one with a case-insensitive
+matching name — the most-active match if there are duplicates) and seeds a
+`Mastery` row (score `0.5`) for every topic on first creation.
 
 **File:** `app/api/student/route.ts`
 
@@ -17,7 +19,7 @@ Creates a student and seeds a `Mastery` row (score `0.5`) for every topic.
 
 **Response `200`:**
 ```json
-{ "student": { "id": "cuid...", "name": "Priya Sharma" } }
+{ "id": "cuid...", "name": "Priya Sharma" }
 ```
 
 **Response `400`:** `{ "error": "Name is required" }` if `name` is empty/missing.
@@ -26,8 +28,7 @@ Creates a student and seeds a `Mastery` row (score `0.5`) for every topic.
 
 ## `GET /api/student`
 
-Lists all students, alphabetically by name. (Not currently used by any
-page — available for future use.)
+Lists all students, alphabetically by name.
 
 **Response `200`:**
 ```json
@@ -36,39 +37,38 @@ page — available for future use.)
 
 ---
 
-## `GET /api/student/[id]`
+## `GET /api/student/[id]/summary`
 
-One student's masteries, weak topics, and full attempt history — powers
-`/revision` and the dashboard's student drill-down panel.
+One student's masteries, overall progress, and recent attempts — powers
+the student's own `/dashboard` home page.
 
-**File:** `app/api/student/[id]/route.ts`
+**File:** `app/api/student/[id]/summary/route.ts`
 
 **Response `200`:**
 ```json
 {
-  "student": { "id": "...", "name": "..." },
-  "masteries": [
+  "name": "Priya Sharma",
+  "className": "Class 8 · Mathematics",
+  "overallMastery": 0.63,
+  "topicMastery": [
     { "topicId": "...", "topicName": "Fractions", "score": 0.63 },
     ...
   ],
-  "weakTopics": [
-    { "topicId": "...", "topicName": "Ratios", "score": 0.31, "attemptCount": 7 }
-  ],
-  "attempts": [
+  "hasNextQuestion": true,
+  "weakTopicCount": 1,
+  "totalAttempts": 42,
+  "accuracy": 71,
+  "recentAttempts": [
     {
-      "id": "...",
-      "questionText": "2/3 + 1/6 = ?",
-      "topicName": "Fractions",
-      "difficulty": 2,
-      "correct": true,
-      "createdAt": "2026-09-22T..."
+      "id": "...", "questionText": "2/3 + 1/6 = ?", "topicName": "Fractions",
+      "difficulty": 2, "correct": true, "createdAt": "2026-09-22T..."
     },
     ...
   ]
 }
 ```
-Attempts are ordered newest-first. `weakTopics` uses the same rule as the
-adaptive engine (`mastery < 0.5` AND `attemptCount >= 3`), sorted weakest first.
+`recentAttempts` returns up to 20, newest-first. `weakTopicCount` uses the
+same weak-topic rule as the adaptive engine.
 
 **Response `404`:** `{ "error": "Student not found" }`
 
@@ -78,8 +78,8 @@ adaptive engine (`mastery < 0.5` AND `attemptCount >= 3`), sorted weakest first.
 
 Returns the next question to serve, using the diagnostic-then-adaptive
 logic in `lib/quiz-service.ts`. Pass `topicId` (from the `/revision` page's
-"Practice this" button, or `?topic=` on `/quiz`) to restrict to one topic
-and skip the diagnostic phase entirely.
+"Practice this" button, or `?topic=` on `/practice`) to restrict to one
+topic and skip the diagnostic phase entirely.
 
 **File:** `app/api/quiz/next/route.ts`
 
@@ -89,17 +89,22 @@ and skip the diagnostic phase entirely.
   "question": {
     "id": "...", "text": "2/3 + 1/6 = ?",
     "options": ["5/6", "3/9", "1/2", "4/6"],
-    "difficulty": 2, "topicId": "...", "topicName": "Fractions"
+    "difficulty": 2
   },
+  "topic": { "id": "...", "name": "Fractions" },
   "reason": "Diagnostic question 1 of 8 for Fractions — establishing your baseline.",
-  "phase": "diagnostic",
-  "diagnosticProgress": { "current": 1, "total": 8 }
+  "mode": "diagnostic",
+  "questionNumber": 1,
+  "totalDiagnostic": 8
 }
 ```
 
-**Response `200` (adaptive phase):** same shape, `phase: "adaptive"`,
-`diagnosticProgress` omitted, `reason` explains the topic choice (see
-[ADAPTIVE-ENGINE.md](ADAPTIVE-ENGINE.md#3-adaptive-phase-after-the-diagnostic)).
+**Response `200` (adaptive phase):** same shape, `mode: "adaptive"`,
+`reason` is one of the "Targeted Remediation" / "Interleaved
+Reinforcement" / "Focused Practice" templates explaining the topic choice
+(see [ADAPTIVE-ENGINE.md](ADAPTIVE-ENGINE.md#picking-the-topic-weighted-interleaved-sampling)),
+`questionNumber` cycles `1..ADAPTIVE_SESSION_LENGTH` (15) for the
+progress bar.
 
 Note: `options` never includes which index is correct — that's resolved
 server-side in `/api/quiz/answer` so it can never leak to the client.
@@ -114,7 +119,7 @@ shouldn't happen with the seeded data but is handled defensively)
 ## `POST /api/quiz/answer`
 
 Records an attempt, updates that topic's `Mastery` row, returns whether
-the answer was correct.
+the answer was correct plus the student's full updated mastery snapshot.
 
 **File:** `app/api/quiz/answer/route.ts`
 
@@ -128,41 +133,177 @@ the answer was correct.
 {
   "correct": false,
   "correctIdx": 0,
-  "topicId": "...",
-  "mastery": 0.425
+  "priorScore": 0.5,
+  "newScore": 0.425,
+  "scoreDelta": -0.075,
+  "topicName": "Fractions",
+  "updatedMastery": [
+    { "topicId": "...", "topicName": "Fractions", "score": 0.425 },
+    ...
+  ]
 }
 ```
-`mastery` is the topic's *new* score after this attempt's update.
 
 **Response `400`:** missing/wrong-typed fields.
 **Response `404`:** `{ "error": "Question not found" }`
 
 ---
 
+## `GET /api/revision?studentId=<id>`
+
+A student's weak topics with a time-to-mastery estimate for each — powers
+`/revision`.
+
+**File:** `app/api/revision/route.ts`
+
+**Response `200`:**
+```json
+{
+  "weakTopics": [
+    {
+      "topicId": "...", "topicName": "Ratios",
+      "mastery": 22, "status": "Weak", "recentAccuracy": "18%",
+      "attemptsToMastery": 34
+    },
+    ...
+  ]
+}
+```
+Uses the same weak-topic rule as the adaptive engine (`mastery < 0.5` AND
+`attemptCount >= 3`); if that yields nothing, falls back to any
+not-yet-mastered topic (`score < 0.8`), sorted weakest first.
+`attemptsToMastery` comes from Model 3 (`predictAttemptsToMastery()`),
+given the topic's current mastery and the student's recent accuracy on it
+as an aptitude proxy.
+
+---
+
+## `GET /api/questions`
+
+Lists every question with its topic name and observed pass rate — powers
+the teacher `/teacher/resources` question-bank page.
+
+**File:** `app/api/questions/route.ts`
+
+**Response `200`:**
+```json
+{
+  "questions": [
+    {
+      "id": "...", "topicId": "...", "topicName": "Fractions",
+      "text": "1/2 + 1/4 = ?", "options": ["3/4", "1/6", "2/6", "1/8"],
+      "answerIdx": 0, "difficulty": 1,
+      "totalAttempts": 12, "passRate": 83
+    },
+    ...
+  ]
+}
+```
+
+## `POST /api/questions`
+
+Adds a new question to the bank.
+
+**Request body:**
+```json
+{ "topicId": "...", "text": "...", "options": ["a", "b", "c", "d"], "answerIdx": 0, "difficulty": 2 }
+```
+
+**Response `201`:** the created `Question` row.
+**Response `400`:** `{ "error": "Missing required fields" }`
+**Response `500`:** `{ "error": "<message>" }` on unexpected failure.
+
+---
+
 ## `GET /api/dashboard`
 
 Everything the teacher dashboard needs in one call: per-student mastery by
-topic, archetype badge, weak topics, and attempt counts.
+topic, archetype badge, at-risk/declining-trend flags, class-wide stats,
+and topic-priority ranking.
 
 **File:** `app/api/dashboard/route.ts`
 
 **Response `200`:**
 ```json
 {
-  "topics": [{ "id": "...", "name": "Fractions" }, ...],
   "students": [
     {
       "id": "...", "name": "Aisha Khan",
-      "masteryByTopic": { "<topicId>": 0.78, ... },
-      "totalAttempts": 25, "correctAttempts": 23,
-      "weakTopics": [],
-      "archetype": "On Track"
+      "archetype": "On Track",
+      "topicMastery": [
+        { "topicId": "...", "topicName": "Fractions", "score": 0.78, "atRisk": false },
+        ...
+      ],
+      "atRiskTopics": ["Percentages"],
+      "isAtRisk": true
+    },
+    ...
+  ],
+  "classAverage": 0.61,
+  "atRiskCount": 2,
+  "needsAttentionCount": 1,
+  "decliningCount": 5,
+  "topicPriority": [
+    {
+      "topicId": "...", "topicName": "Ratios",
+      "avgMastery": 0.49, "pctStruggling": 0.44, "stdMastery": 0.16,
+      "priority": 71.5
     },
     ...
   ]
 }
 ```
 `archetype` comes from Model 2 ([ML-MODELS.md](ML-MODELS.md#model-2)) — the
-mastery vector passed to it is built in a **fixed topic order**
-(Fractions, Ratios, Linear Equations, Percentages) regardless of the order
-`topics` is returned in, because that's the order the model was trained on.
+mastery vector passed to it is built in a **fixed topic order** (Fractions,
+Ratios, Linear Equations, Percentages), because that's the order the model
+was trained on. `atRisk` / `atRiskTopics` / `isAtRisk` / `decliningCount`
+come from Model 5 ([ML-MODELS.md](ML-MODELS.md#model-5)) — a per-topic
+trend estimate over each student's last 10 attempts on that topic, distinct
+from the static mastery-threshold-based `atRiskCount` (which counts
+`Needs Support` archetypes). `topicPriority` comes from Model 4
+([ML-MODELS.md](ML-MODELS.md#model-4)), ranked highest-priority first.
+
+---
+
+## `GET /api/dashboard/student/[id]`
+
+One student's detail for the **teacher** drill-down view
+(`/teacher/students/[id]`) — a separate, richer endpoint from the
+student's own `/api/student/[id]/summary`, since a teacher wants the
+archetype label and generated insights that a student's own home page
+doesn't show.
+
+**File:** `app/api/dashboard/student/[id]/route.ts`
+
+**Response `200`:**
+```json
+{
+  "name": "Priya Sharma",
+  "className": "Class 8 · Mathematics",
+  "status": "On Track",
+  "overallMastery": 0.63,
+  "questionsAttempted": 42,
+  "accuracy": 0.71,
+  "topicMastery": [
+    { "topicId": "...", "topicName": "Fractions", "score": 0.63 },
+    ...
+  ],
+  "recentAttempts": [
+    {
+      "id": "...", "topicName": "Fractions", "difficulty": 2,
+      "correct": true, "createdAt": "2026-09-22T..."
+    },
+    ...
+  ],
+  "weakTopics": [
+    { "topicId": "...", "topicName": "Ratios", "mastery": 31, "status": "Weak" }
+  ],
+  "insights": ["..."]
+}
+```
+`status` is the Model 2 archetype label. `insights` is a small set of
+data-driven observation strings (`lib/insights.ts`) — not an LLM call; it
+reuses Model 5's `estimateTrend()` helper against the student's own recent
+attempts. `recentAttempts` returns up to 30, newest-first.
+
+**Response `404`:** `{ "error": "Student not found" }`

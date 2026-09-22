@@ -57,28 +57,52 @@ they've somehow exhausted the unseen ones.
 Once 8+ attempts exist, every subsequent question goes through
 `selectTargetTopic()` then `selectQuestion()`.
 
-### Picking the topic: weakest-first
+### Picking the topic: weighted interleaved sampling
 
 ```ts
 function selectTargetTopic(masteries, restrictToTopicId?) {
-  const candidates = restrictToTopicId
-    ? masteries.filter(m => m.topicId === restrictToTopicId)   // "Practice this" mode
-    : masteries.filter(m => m.score < MASTERY_THRESHOLD);       // 0.8 — not yet mastered
-  const pool = candidates.length > 0 ? candidates : masteries;   // fallback: everything mastered
-  const weakest = [...pool].sort((a, b) => a.score - b.score)[0];
+  if (restrictToTopicId) {
+    // "Practice this" mode: strictly serve that one topic
+    ...
+  }
+
+  const pool = masteries.filter(m => m.score < MASTERY_THRESHOLD); // 0.8 — not yet mastered
+  const activePool = pool.length > 0 ? pool : masteries;            // fallback: everything mastered
+
+  // Interleaved weighted sampling: lower mastery gets higher probability
+  // weight = (1.05 - score) ^ 2
+  const weights = activePool.map(m => Math.pow(Math.max(0.08, 1.05 - m.score), 2));
+  const totalWeight = weights.reduce((sum, w) => sum + w, 0);
+
+  let randomVal = Math.random() * totalWeight;
+  let selected = activePool[0];
+  for (let i = 0; i < activePool.length; i++) {
+    randomVal -= weights[i];
+    if (randomVal <= 0) { selected = activePool[i]; break; }
+  }
   ...
 }
 ```
 
-Among topics not yet "mastered" (`score < 0.8`), it picks the single
-weakest one and serves a question there. This is a greedy strategy — it
-will keep hammering the same weak topic across many consecutive questions
-until that topic's mastery rises above whatever the next-weakest topic is.
-That's intentional: the goal is remediation, not balanced topic rotation.
+Among topics not yet "mastered" (`score < 0.8`), the topic isn't always the
+single weakest one — instead each unmastered topic gets a probability
+weight of `(1.05 - score)²`, so a topic at 20% mastery is far more likely
+to be picked than one at 60%, but the stronger topic still gets served
+sometimes. This is a deliberate move away from a pure greedy
+weakest-first strategy (which would hammer one topic for many consecutive
+questions): weighted sampling still concentrates practice on the weakest
+areas but interleaves other still-unmastered topics, which the spaced/
+interleaved-practice literature generally finds aids retention better than
+one long uninterrupted block on a single topic.
+
+The returned `reason` string reflects which case happened: if the sampled
+topic is the actual weakest in the pool it reads as **"Targeted
+Remediation"**; if a different (but still unmastered) topic was sampled
+for interleaving, it reads as **"Interleaved Reinforcement"** — see below.
 
 If `restrictToTopicId` is set (the `/revision` page's "Practice this"
-button, via `?topic=<id>` on the quiz URL), the topic choice is skipped
-entirely and every question comes from that one topic.
+button, via `?topic=<id>` on the practice page URL), the weighted sampling
+is skipped entirely and every question comes from that one topic.
 
 ### Picking the difficulty: the ML model, not a hand-coded ladder
 
@@ -95,23 +119,20 @@ difficulty" zone from learning science. This replaced an earlier hand-coded
 
 ### The explainability string
 
-Every returned question comes with a plain-English `reason`:
+Every returned question comes with a plain-English `reason`, one of three
+templates depending on which branch of `selectTargetTopic()` produced it:
 
 ```
-"Recommended because your Ratios mastery is 22% — lower than your other topics (avg 61%)."
-```
-
-or, in "Practice this" mode:
-
-```
-"Practicing Ratios — your mastery here is 22%."
+"Targeted Remediation: Your Ratios mastery (22%) is your priority improvement area."
+"Interleaved Reinforcement: Practicing Ratios (61% mastery) alongside your priority chapters."
+"Focused Practice: Ratios (Current Mastery: 22%)."   // "Practice this" / restrictToTopicId mode
 ```
 
 This is a template string (not an LLM call — an earlier plan considered
 calling Claude per-question for this, but that was never wired in; see the
 "What's genuinely ML" note in the root README). It's shown on the student
-quiz UI as a named feature so the reasoning behind each question is never
-opaque.
+practice UI as a named feature so the reasoning behind each question is
+never opaque.
 
 ### Picking the specific question: no-repeat rule
 

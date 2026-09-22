@@ -92,8 +92,9 @@ Two things are commonly hand-coded in prototypes like this and were instead
    clustering model, not a hardcoded rule. See
    [docs/ML-MODELS.md](docs/ML-MODELS.md#model-2).
 
-Three more models were built alongside these (time-to-mastery estimation,
-class-wide topic-priority ranking, an at-risk/declining-trend detector) —
-trained and tested, but not all are wired into the UI. See
+Three more models are wired in alongside these: time-to-mastery estimation
+(`/revision`'s "attempts to mastery" estimate), class-wide topic-priority
+ranking (`/teacher/class-insights`'s Class Focus panel), and an
+at-risk/declining-trend detector (`/teacher`'s heatmap flag). See
 [docs/ML-MODELS.md](docs/ML-MODELS.md) for the full picture, including honest
 accuracy numbers and where each model's fit is genuinely strong vs. weak.

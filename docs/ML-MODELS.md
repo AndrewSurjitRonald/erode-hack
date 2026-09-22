@@ -12,10 +12,10 @@ needed to retrain.
 | # | Model | Type | Wired into the app? |
 |---|---|---|---|
 | 1 | [Difficulty selection](#model-1) | Logistic regression | ✅ `lib/adaptive-engine.ts` |
-| 2 | [Archetype clustering](#model-2) | KMeans | ✅ `/dashboard` |
-| 3 | [Time-to-mastery](#model-3) | Linear regression (quadratic features) | ❌ trained + tested only |
-| 4 | [Topic priority](#model-4) | Linear regression | ❌ trained + tested only |
-| 5 | [At-risk detector](#model-5) | Logistic regression | ❌ trained + tested only |
+| 2 | [Archetype clustering](#model-2) | KMeans | ✅ `/teacher` (class heatmap) |
+| 3 | [Time-to-mastery](#model-3) | Linear regression (quadratic features) | ✅ `/revision` |
+| 4 | [Topic priority](#model-4) | Linear regression | ✅ `/teacher/class-insights` |
+| 5 | [At-risk detector](#model-5) | Logistic regression | ✅ `/teacher` (declining-trend badge) |
 
 All five report **held-out accuracy in the 85-90% range** (see each
 section for exact numbers). Where the ground-truth generating formula is
@@ -143,7 +143,12 @@ of the 3 centroids; returns the nearest one's label.
 (`score >= 0.8`) on a topic, given their current mastery and an "aptitude"
 estimate (their steady-state per-attempt success probability).
 
-**Not wired into the UI yet.** Trained and unit-tested only.
+**Wired into the app:** `app/api/revision/route.ts` calls
+`predictAttemptsToMastery(mastery, aptitude)` for each of a student's weak
+topics, where `aptitude` is the student's recent accuracy on that topic
+(falling back to their current mastery score if they have no attempts on
+it yet). The result is shown on `/revision` as "~N questions to mastery"
+next to each weak topic.
 
 **Training data** (`data/time_to_mastery_training_data.csv`, 200,000 rows,
 columns `initial_mastery, aptitude, attempts_to_mastery`): this is the one
@@ -199,10 +204,12 @@ whole-class instruction on this topic right now", from three class-wide
 stats: average mastery, fraction of students struggling (`mastery < 0.5`),
 and the spread (std dev) of mastery across the class.
 
-**Not wired into the UI yet.** Trained and unit-tested only. Intended use:
-a "class focus" panel on the teacher dashboard ranking all 4 topics by
-urgency (`rankTopicsByPriority()` is already implemented and tested for
-this).
+**Wired into the app:** `app/api/dashboard/route.ts` computes each topic's
+`avgMastery`, `pctStruggling`, and `stdMastery` across all students and
+calls `rankTopicsByPriority()`, returned as `topicPriority` in the
+dashboard response. `/teacher/class-insights` renders it as the "Class
+Focus" panel — topics ranked highest-priority first with a progress bar
+for the 0-100 score.
 
 **Training data** (`data/topic_priority_training_data.csv`, 200,000 rows,
 columns `avg_mastery, pct_struggling, std_mastery, priority`): ground
@@ -233,7 +240,16 @@ declining lately), not just the current level. A student sitting at 0.55
 mastery but trending sharply downward can be flagged before they cross the
 static threshold.
 
-**Not wired into the UI yet.** Trained and unit-tested only.
+**Wired into the app:** `app/api/dashboard/route.ts` computes, per student
+per topic, `estimateTrend()` over that student's last 10 attempts on the
+topic, then calls `isAtRisk(mastery, trend)`. Topics flagged at-risk are
+returned as `atRiskTopics` per student; a student with any at-risk topic
+gets `isAtRisk: true`. The teacher dashboard (`/teacher`) shows this as a
+small flag badge next to the student's name in the heatmap (tooltip lists
+the affected topics) and rolls it up into a "Declining trend" stat card —
+distinct from, and complementary to, the static `Needs Support` /
+`Uneven` archetype badges from Model 2, since a student can look fine on
+the static mastery snapshot while trending down.
 
 **Training data** (`data/at_risk_training_data.csv`, 200,000 rows, columns
 `mastery, trend, attempts_count, at_risk`): ground truth is
