@@ -49,6 +49,7 @@ function PracticeContent() {
   const topicFilter = searchParams.get("topic") ?? undefined;
 
   const studentId = useStudentId();
+  const [topicsList, setTopicsList] = useState<{ id: string; name: string }[]>([]);
   const [current, setCurrent] = useState<NextQuestion | null>(null);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [result, setResult] = useState<AnswerResult | null>(null);
@@ -96,6 +97,21 @@ function PracticeContent() {
       router.replace("/");
       return;
     }
+    // Load available topics for filter pills
+    fetch(`/api/student/${id}/summary`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.topicMastery) {
+          setTopicsList(
+            data.topicMastery.map((tm: { topicId: string; topicName: string }) => ({
+              id: tm.topicId,
+              name: tm.topicName,
+            }))
+          );
+        }
+      })
+      .catch(() => {});
+
     const url = topicFilter
       ? `/api/quiz/next?studentId=${id}&topicId=${topicFilter}`
       : `/api/quiz/next?studentId=${id}`;
@@ -202,6 +218,36 @@ function PracticeContent() {
             </button>
           </div>
         </header>
+
+        {/* Chapter Selection Bar */}
+        <div className="flex flex-wrap items-center gap-2 mb-6 bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs">
+          <span className="text-[11px] font-extrabold uppercase text-slate-400 mr-1 tracking-wider">
+            Practice Chapter:
+          </span>
+          <button
+            onClick={() => router.push("/practice")}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              !topicFilter
+                ? "bg-[#0F172A] text-white shadow-xs"
+                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+            }`}
+          >
+            🎯 All Chapters (Adaptive)
+          </button>
+          {topicsList.map((tItem) => (
+            <button
+              key={tItem.id}
+              onClick={() => router.push(`/practice?topic=${tItem.id}`)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                topicFilter === tItem.id
+                  ? "bg-blue-600 text-white shadow-xs"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              {tItem.name}
+            </button>
+          ))}
+        </div>
 
         {loading && <SkeletonQuestion />}
 

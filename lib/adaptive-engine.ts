@@ -48,45 +48,62 @@ export type NextQuestionResult = {
 };
 
 /**
- * Chooses which topic to serve next: the weakest topic not yet mastered.
- * Ties broken by topic order (stable) to keep behavior deterministic.
+ * Chooses which topic to serve next.
+ * If restrictToTopicId is set, strictly serves that topic.
+ * Otherwise, uses weighted remedial sampling based on inverse mastery,
+ * heavily prioritizing the weakest topic while interleaving other chapters.
  */
 export function selectTargetTopic(
   masteries: MasteryState[],
   restrictToTopicId?: string
 ): NextQuestionResult | null {
-  const candidates = restrictToTopicId
-    ? masteries.filter((m) => m.topicId === restrictToTopicId)
-    : masteries.filter((m) => m.score < MASTERY_THRESHOLD);
+  if (restrictToTopicId) {
+    const matched = masteries.find((m) => m.topicId === restrictToTopicId);
+    if (!matched) return null;
+    const targetDifficulty = selectDifficulty(matched.score);
+    return {
+      topicId: matched.topicId,
+      topicName: matched.topicName,
+      targetDifficulty,
+      reason: `Focused Practice: ${matched.topicName} (Current Mastery: ${Math.round(
+        matched.score * 100
+      )}%).`,
+    };
+  }
 
-  const pool = candidates.length > 0 ? candidates : masteries;
-  if (pool.length === 0) return null;
+  const pool = masteries.filter((m) => m.score < MASTERY_THRESHOLD);
+  const activePool = pool.length > 0 ? pool : masteries;
+  if (activePool.length === 0) return null;
 
-  const sorted = [...pool].sort((a, b) => a.score - b.score);
-  const weakest = sorted[0];
-  const targetDifficulty = selectDifficulty(weakest.score);
+  // Interleaved weighted sampling: lower mastery gets higher probability
+  // weight = (1.05 - score) ^ 2
+  const weights = activePool.map((m) => Math.pow(Math.max(0.08, 1.05 - m.score), 2));
+  const totalWeight = weights.reduce((sum, w) => sum + w, 0);
 
-  const otherTopics = masteries.filter((m) => m.topicId !== weakest.topicId);
-  const avgOthers =
-    otherTopics.length > 0
-      ? otherTopics.reduce((sum, m) => sum + m.score, 0) / otherTopics.length
-      : weakest.score;
+  let randomVal = Math.random() * totalWeight;
+  let selected = activePool[0];
+  for (let i = 0; i < activePool.length; i++) {
+    randomVal -= weights[i];
+    if (randomVal <= 0) {
+      selected = activePool[i];
+      break;
+    }
+  }
 
-  const reason = restrictToTopicId
-    ? `Practicing ${weakest.topicName} — your mastery here is ${Math.round(
-        weakest.score * 100
-      )}%.`
-    : otherTopics.length > 0
-    ? `Recommended because your ${weakest.topicName} mastery is ${Math.round(
-        weakest.score * 100
-      )}% — lower than your other topics (avg ${Math.round(avgOthers * 100)}%).`
-    : `Recommended because your ${weakest.topicName} mastery is ${Math.round(
-        weakest.score * 100
-      )}%.`;
+  const targetDifficulty = selectDifficulty(selected.score);
+  const isLowest = activePool.every((m) => m.score >= selected.score);
+
+  const reason = isLowest
+    ? `Targeted Remediation: Your ${selected.topicName} mastery (${Math.round(
+        selected.score * 100
+      )}%) is your priority improvement area.`
+    : `Interleaved Reinforcement: Practicing ${selected.topicName} (${Math.round(
+        selected.score * 100
+      )}% mastery) alongside your priority chapters.`;
 
   return {
-    topicId: weakest.topicId,
-    topicName: weakest.topicName,
+    topicId: selected.topicId,
+    topicName: selected.topicName,
     targetDifficulty,
     reason,
   };
