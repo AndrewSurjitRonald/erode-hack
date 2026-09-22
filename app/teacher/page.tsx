@@ -6,15 +6,23 @@ import { Sidebar } from "@/components/Sidebar";
 import { ArchetypeDonut } from "@/components/ArchetypeDonut";
 import { bandForScore, MASTERY_COLORS } from "@/lib/colors";
 import { useI18n } from "@/lib/i18n";
-import { IconUsers, IconTrendingUp, IconAlertTriangle, IconUser } from "@/lib/icons";
+import { IconUsers, IconTrendingUp, IconAlertTriangle, IconUser, IconFlag } from "@/lib/icons";
 
-type TopicMastery = { topicId: string; topicName: string; score: number };
-type StudentRow = { id: string; name: string; archetype: string; topicMastery: TopicMastery[] };
+type TopicMastery = { topicId: string; topicName: string; score: number; atRisk: boolean };
+type StudentRow = {
+  id: string;
+  name: string;
+  archetype: string;
+  topicMastery: TopicMastery[];
+  atRiskTopics: string[];
+  isAtRisk: boolean;
+};
 type DashboardData = {
   students: StudentRow[];
   classAverage: number;
   atRiskCount: number;
   needsAttentionCount: number;
+  decliningCount: number;
 };
 
 function StatCard({
@@ -122,8 +130,8 @@ export default function TeacherDashboardPage() {
 
         {!loading && data && (
           <div className="flex flex-col gap-6 animate-fade-in">
-            {/* 4 Stat Cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Stat Cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
               <StatCard
                 label={t("students")}
                 value={String(data.students.length > 0 ? data.students.length : 32)}
@@ -147,6 +155,12 @@ export default function TeacherDashboardPage() {
                 value={String(data.needsAttentionCount || 2)}
                 icon={<IconUser className="w-5 h-5" />}
                 tone="warning"
+              />
+              <StatCard
+                label="Declining trend"
+                value={String(data.decliningCount ?? 0)}
+                icon={<IconFlag className="w-5 h-5" />}
+                tone="danger"
               />
             </div>
 
@@ -186,7 +200,17 @@ export default function TeacherDashboardPage() {
                           className="cursor-pointer hover:bg-slate-50/80 transition-colors group"
                         >
                           <td className="py-2 pl-3 pr-4 whitespace-nowrap font-bold text-sm text-[#0F172A] group-hover:text-blue-600 transition-colors">
-                            {s.name}
+                            <span className="inline-flex items-center gap-1.5">
+                              {s.name}
+                              {s.isAtRisk && (
+                                <span
+                                  title={`Declining trend: ${s.atRiskTopics.join(", ")}`}
+                                  className="inline-flex items-center justify-center w-4.5 h-4.5 rounded-full bg-red-50 text-red-600"
+                                >
+                                  <IconFlag className="w-3 h-3" />
+                                </span>
+                              )}
+                            </span>
                           </td>
                           {s.topicMastery.map((tItem) => (
                             <MasteryCell key={tItem.topicId} score={tItem.score} />

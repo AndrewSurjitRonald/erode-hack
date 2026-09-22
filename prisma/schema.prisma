@@ -29,7 +29,7 @@ model Question {
   topicId    String
   topic      Topic     @relation(fields: [topicId], references: [id])
   text       String
-  options    String // JSON stringified array of 4 options
+  options    String[] // 4 option strings
   answerIdx  Int
   difficulty Int // 1, 2, or 3
   attempts   Attempt[]

@@ -14,6 +14,7 @@ type WeakTopic = {
   mastery: number;
   status: "Weak" | "Needs Practice";
   recentAccuracy: string;
+  attemptsToMastery: number;
 };
 
 const STATUS_STYLE: Record<WeakTopic["status"], string> = {
@@ -110,7 +111,8 @@ export default function RevisionPage() {
                           <div>
                             <p className="font-bold text-[#0F172A] text-base">{tItem.topicName}</p>
                             <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-                              Current mastery: {tItem.mastery}%
+                              Current mastery: {tItem.mastery}% · ~{tItem.attemptsToMastery} question
+                              {tItem.attemptsToMastery === 1 ? "" : "s"} to mastery
                             </p>
                           </div>
                         </div>

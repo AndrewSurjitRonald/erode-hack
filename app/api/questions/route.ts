@@ -13,13 +13,6 @@ export async function GET() {
   });
 
   const formatted = questions.map((q) => {
-    let parsedOptions: string[] = [];
-    try {
-      parsedOptions = JSON.parse(q.options);
-    } catch {
-      parsedOptions = [];
-    }
-
     const totalAttempts = q.attempts.length;
     const correctAttempts = q.attempts.filter((a) => a.correct).length;
     const passRate = totalAttempts > 0 ? Math.round((correctAttempts / totalAttempts) * 100) : null;
@@ -29,7 +22,7 @@ export async function GET() {
       topicId: q.topicId,
       topicName: q.topic.name,
       text: q.text,
-      options: parsedOptions,
+      options: q.options,
       answerIdx: q.answerIdx,
       difficulty: q.difficulty,
       totalAttempts,
@@ -53,7 +46,7 @@ export async function POST(req: Request) {
       data: {
         topicId,
         text: String(text).trim(),
-        options: JSON.stringify(options),
+        options,
         answerIdx: Number(answerIdx),
         difficulty: Number(difficulty) || 1,
       },

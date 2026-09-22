@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getStudentWeakTopics, getStudentTopicMastery } from "@/lib/student-data";
+import { predictAttemptsToMastery } from "@/lib/ml/time-to-mastery-model";
 
 export async function GET(req: NextRequest) {
   const studentId = req.nextUrl.searchParams.get("studentId");
@@ -30,10 +31,12 @@ export async function GET(req: NextRequest) {
   const weakTopics = weak.map((t) => {
     const topicAttempts = attempts.filter((a) => a.question.topicId === t.topicId);
     const correct = topicAttempts.filter((a) => a.correct).length;
+    const aptitude = topicAttempts.length > 0 ? correct / topicAttempts.length : t.score;
     const recentAccuracy =
       topicAttempts.length > 0
         ? `${Math.round((correct / topicAttempts.length) * 100)}%`
         : "—";
+    const attemptsToMastery = predictAttemptsToMastery(t.score, aptitude);
 
     return {
       topicId: t.topicId,
@@ -41,6 +44,7 @@ export async function GET(req: NextRequest) {
       mastery: Math.round(t.score * 100),
       status: t.score < 0.4 ? ("Weak" as const) : ("Needs Practice" as const),
       recentAccuracy,
+      attemptsToMastery,
     };
   });
 

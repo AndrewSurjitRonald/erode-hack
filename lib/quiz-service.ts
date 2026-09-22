@@ -65,7 +65,7 @@ export async function getNextQuestion(
       question: {
         id: picked.id,
         text: picked.text,
-        options: JSON.parse(picked.options),
+        options: picked.options,
         difficulty: picked.difficulty,
       },
       topic: { id: targetTopic.id, name: targetTopic.name },
@@ -118,7 +118,7 @@ export async function getNextQuestion(
     question: {
       id: fullQuestion.id,
       text: fullQuestion.text,
-      options: JSON.parse(fullQuestion.options),
+      options: fullQuestion.options,
       difficulty: fullQuestion.difficulty,
     },
     topic: { id: target.topicId, name: target.topicName },

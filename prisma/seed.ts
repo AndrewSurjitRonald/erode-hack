@@ -70,12 +70,18 @@ async function main() {
   ];
 
   for (const t of topicData) {
+    const existing = await prisma.topic.findFirst({ where: { name: t.name } });
+    if (existing) {
+      console.log(`Skipping ${t.name} — already seeded`);
+      continue;
+    }
+
     const topic = await prisma.topic.create({ data: { name: t.name } });
     await prisma.question.createMany({
       data: t.questions.map((q) => ({
         topicId: topic.id,
         text: q.text,
-        options: JSON.stringify(q.options),
+        options: q.options,
         answerIdx: q.answerIdx,
         difficulty: q.difficulty,
       })),

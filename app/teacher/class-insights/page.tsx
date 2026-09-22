@@ -13,11 +13,22 @@ interface StudentData {
   overall: number;
 }
 
+interface TopicPriority {
+  topicId: string;
+  topicName: string;
+  avgMastery: number;
+  pctStruggling: number;
+  stdMastery: number;
+  priority: number;
+}
+
 interface DashboardResponse {
   students: StudentData[];
   classAverage: number;
   atRiskCount: number;
   needsAttentionCount: number;
+  decliningCount: number;
+  topicPriority: TopicPriority[];
 }
 
 export default function ClassInsightsPage() {
@@ -230,6 +241,46 @@ export default function ClassInsightsPage() {
                     </p>
                   </div>
                 </div>
+              </div>
+            </div>
+
+            {/* Class Focus: ML-ranked topic priority */}
+            <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs">
+              <div className="flex items-center justify-between mb-1">
+                <h3 className="text-lg font-bold text-[#0F172A]">Class Focus</h3>
+                <span className="px-3 py-1 bg-purple-50 text-purple-700 text-xs font-bold rounded-full border border-purple-200">
+                  ML Ranked
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mb-5">
+                Topics ranked by instructional urgency — a trained model weighing average mastery,
+                the share of struggling students, and how uneven mastery is across the class.
+              </p>
+              <div className="flex flex-col gap-3">
+                {(data?.topicPriority ?? []).map((tp, i) => (
+                  <div
+                    key={tp.topicId}
+                    className="flex items-center gap-4 p-3 rounded-2xl border border-slate-100 bg-slate-50/50"
+                  >
+                    <span className="w-7 h-7 rounded-full bg-white border border-slate-200 flex items-center justify-center text-xs font-bold text-slate-500 shrink-0">
+                      {i + 1}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-bold text-sm text-[#0F172A] truncate">{tp.topicName}</span>
+                        <span className="text-xs font-bold text-slate-600 shrink-0">
+                          {Math.round(tp.priority)} / 100 priority
+                        </span>
+                      </div>
+                      <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-purple-500 transition-all duration-500"
+                          style={{ width: `${Math.round(tp.priority)}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
 
